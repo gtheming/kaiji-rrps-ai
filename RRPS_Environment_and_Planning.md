@@ -1,6 +1,5 @@
 # Restricted Rock–Paper–Scissors (Kaiji)
 *AI Environment Specification & Strategies*
-■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ 
 
 ## 1. Executive framing
 For this project, Restricted Rock-Paper-Scissors should be modeled as a partially observable multi-agent game with social and economic layers, not as a standard single-agent reinforcement-learning benchmark. The canon gives every contestant twelve cards (four Rock, four Paper, four Scissors), three stars, and a four-hour limit. Players simultaneously reveal one card per match, the loser hands over one star, draws return stars to their owners, and used cards are discarded. To clear the game, a contestant must use all cards and finish with at least three stars. Canon also includes war-fund loans, interest pressure, surplus-star cash-out, and a short postgame star market for desperate survivors.[C1][C2][C3][C4]
@@ -44,7 +43,7 @@ Use a common outcome vector for every run, then let each personality family defi
 A generic scalarization can be written conceptually as:
 
 ```text
-U = w_survive·Survival + w_stars·FinalStars + w_time·FinishBonus + w_cash·NetCash + w_debt·Debt + ... + w_rep·Reputation + w_pred·ExploitYield
+U = w_survive·Survival + w_stars·FinalStars + w_time·FinishBonus + w_cash·NetCash + w_debt·Debt + w_rep·Reputation + w_pred·ExploitYield
 ```
 Different strategy families simply use different weights, thresholds, or non-linear bonuses.
 | Personality family | Example utility emphasis | Behavior encouraged |
