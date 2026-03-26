@@ -75,29 +75,35 @@ class Tournament:
         list[tuple[Player, Player]]
     '''
     def _pair_players(self) -> list[tuple[Player, Player]]:
-        unpaired = self._alive_players()
+        unpaired = [p for p in self._alive_players() if p.available_moves != []]
         pairs = []
         for p in unpaired:
            attempt = p.select_opponent
-           if attempt[1]:
-              pairs.append[p, attempt[3]]
-              unpaired = attempt[2]
+           if attempt[0]:
+              pairs.append[p, attempt[2]]
+              unpaired = attempt[1]
         return pairs
+    
+    '''
+    Completes a matchup between two players
+    Args:
+        op  (Player) opponent
+    '''
+    def matchup(p1: Player, p2: Player):
+       m1 = random.choice(p1.available_moves())
+       m2 = random.choice(p2.available_moves())
+       match resolve(m1, m2):
+            case -1:
+                p2.steal_life(p1)
+            case 1:
+                p1.steal_life(p2)
 
     '''
     Simulates a single round of RPS
     '''
     def _run_round(self):
-        for p1 in self._pair_players():
-            m1 = random.choice(p1.available_moves())
-            m2 = random.choice(p2.available_moves())
-            outcome = resolve(m1, m2)
-            p1.use_move(m1)
-            p2.use_move(m2)
-            if outcome == 1:
-                p1.steal_life(p2)
-            elif outcome == -1:
-                p1.lose_life()
+        for pair in self._pair_players():
+            self.matchup(pair[0], pair[1])
     
     '''
     Simulates a tournament until one player remains. Returns the winner
