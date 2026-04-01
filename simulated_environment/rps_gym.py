@@ -5,21 +5,26 @@ from gymnasium import spaces
 from player import Player
 from move import Move
 
-
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def resolve(m1: Move, m2: Move) -> int:
     """Returns 1 if m1 wins, -1 if m2 wins, 0 on tie."""
     if not (isinstance(m1, Move) and isinstance(m2, Move)):
         raise TypeError("Arguments must be valid Move values")
 
-    wins_against = {Move.ROCK: Move.SCISSORS, Move.PAPER: Move.ROCK, Move.SCISSORS: Move.PAPER}
+    wins_against = {
+        Move.ROCK: Move.SCISSORS,
+        Move.PAPER: Move.ROCK,
+        Move.SCISSORS: Move.PAPER,
+    }
     if m1 == m2:
         return 0
     return 1 if wins_against[m1] == m2 else -1
 
 
 # ── environment ───────────────────────────────────────────────────────────────
+
 
 class RestrictedRPSEnv(gym.Env):
     """
@@ -50,9 +55,9 @@ class RestrictedRPSEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
 
     # observation bounds
-    _MAX_LIVES  = 20
+    _MAX_LIVES = 20
     _MAX_BUDGET = 10
-    _MAX_OPS    = 20
+    _MAX_OPS = 20
 
     def __init__(
         self,
@@ -72,14 +77,16 @@ class RestrictedRPSEnv(gym.Env):
 
         # observation space
         high = np.array(
-            [self._MAX_LIVES] +
-            [self._MAX_BUDGET] * 3 +
-            [self._MAX_LIVES] +
-            [self._MAX_BUDGET] * 3 +
-            [self._MAX_OPS],
+            [self._MAX_LIVES]
+            + [self._MAX_BUDGET] * 3
+            + [self._MAX_LIVES]
+            + [self._MAX_BUDGET] * 3
+            + [self._MAX_OPS],
             dtype=np.float32,
         )
-        self.observation_space = spaces.Box(low=np.zeros_like(high), high=high, dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=np.zeros_like(high), high=high, dtype=np.float32
+        )
 
         self._agent: Player | None = None
         self._opponents: list[Player] = []
@@ -87,9 +94,15 @@ class RestrictedRPSEnv(gym.Env):
     # ── private helpers ───────────────────────────────────────────────────────
 
     def _make_players(self):
-        self._agent = Player(player_id=0, lives=self.initial_lives, budget=self.initial_budget)
+        self._agent = Player(
+            player_id=0, lives=self.initial_lives, budget=self.initial_budget
+        )
         self._opponents = [
-            Player(player_id=i + 1, lives=self.initial_lives, budget=self.initial_budget)
+            Player(
+                player_id=i + 1,
+                lives=self.initial_lives,
+                budget=self.initial_budget,
+            )
             for i in range(self.n_opponents)
         ]
 
@@ -104,24 +117,28 @@ class RestrictedRPSEnv(gym.Env):
         alive = self._alive_opponents()
         if not alive:
             return np.zeros(4, dtype=np.float32)
-        op = random.choice(alive)   # focus on a random live opponent
+        op = random.choice(alive)  # focus on a random live opponent
         return np.array(
-            [op.lives,
-             op.budget[Move.ROCK],
-             op.budget[Move.PAPER],
-             op.budget[Move.SCISSORS]],
+            [
+                op.lives,
+                op.budget[Move.ROCK],
+                op.budget[Move.PAPER],
+                op.budget[Move.SCISSORS],
+            ],
             dtype=np.float32,
         )
 
     def _get_obs(self) -> np.ndarray:
         ag = self._agent
         return np.array(
-            [ag.lives,
-             ag.budget[Move.ROCK],
-             ag.budget[Move.PAPER],
-             ag.budget[Move.SCISSORS],
-             *self._opponent_obs(),
-             len(self._alive_opponents())],
+            [
+                ag.lives,
+                ag.budget[Move.ROCK],
+                ag.budget[Move.PAPER],
+                ag.budget[Move.SCISSORS],
+                *self._opponent_obs(),
+                len(self._alive_opponents()),
+            ],
             dtype=np.float32,
         ).clip(self.observation_space.low, self.observation_space.high)
 
@@ -214,9 +231,9 @@ class RestrictedRPSEnv(gym.Env):
     def render(self):
         ag = self._agent
         print(
-            f"[Agent] lives={ag.lives} "
-            f"budget=R{ag.budget[Move.ROCK]}/P{ag.budget[Move.PAPER]}/S{ag.budget[Move.SCISSORS]} | "
-            f"Alive opponents: {len(self._alive_opponents())}"
+            f"[Agent] lives={ag.lives}"
+            f" budget=R{ag.budget[Move.ROCK]}/P{ag.budget[Move.PAPER]}/S{ag.budget[Move.SCISSORS]}"
+            f" | Alive opponents: {len(self._alive_opponents())}"
         )
 
     def close(self):
