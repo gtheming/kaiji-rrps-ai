@@ -3,6 +3,11 @@ import random
 import numpy
 from environment.move import Move
 from abc import ABC, abstractmethod
+from enum import Enum
+
+class PlayerType(Enum):
+    AGENT = 0
+    Radnom = 1
 
 '''
     Abstract representation of a player in a tournament
@@ -81,6 +86,9 @@ class Player(ABC):
     @abstractmethod
     def accept_opponent(self, opponent: "Player") -> bool: ...
 
+    @abstractmethod
+    def get_playertype(self) -> PlayerType:...
+
 '''
 Player with completely randomized behavior
 
@@ -129,6 +137,9 @@ class RandomPlayer(Player):
         '''
         return bool(self.rng.choice([True, False], p=[0.8, 0.2]))
     
+    def get_playertype(self) -> PlayerType:
+        return PlayerType.RANDOM
+    
 
 class AgentPlayer(Player):
     def select_move(self, op: Player | None) -> Move:
@@ -143,3 +154,6 @@ class AgentPlayer(Player):
     def accept_opponent(self, challenger: Player) -> bool:
         # Agent always accepts — the environment handles this interaction
         return True
+    
+    def get_playertype(self) -> PlayerType:
+        return PlayerType.AGENT
