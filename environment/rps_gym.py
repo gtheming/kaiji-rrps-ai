@@ -8,30 +8,36 @@ from environment.move import Move
 
 
 class BudgetObs(TypedDict):
-    rock:     int
-    paper:    int
+    rock: int
+    paper: int
     scissors: int
 
 
 class PlayerObs(TypedDict):
-    stars:    int
-    budget:   BudgetObs
+    player_id: int
+    stars: int
+    budget: BudgetObs
     position: tuple[int, int]
 
 
 class Observation(TypedDict):
-    agent:           PlayerObs
-    opponent:        PlayerObs
+    agent: PlayerObs
+    opponent: PlayerObs
     opponents_alive: int
 
 
 @dataclass
 class RewardConfig:
-    win_matchup: float = 1.0
-    lose_matchup: float = -1.0
-    tie_matchup: float = 0.0
-    eliminated: float = -3.0
-    victory: float = 5.0
+    win_matchup: float = 100
+    lose_matchup: float = -100
+    tie_matchup: float = 10
+    eliminated: float = -300
+    victory: float = 500
+    invalid_move: float = -1
+    within_challenge_range: float = 1
+    approach_opponent: float = 0.5
+    has_cards_at_end: float = -500
+    has_sub_3_stars_at_end: float = -500
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────────────
@@ -117,9 +123,9 @@ class RestrictedRPSEnv(gym.Env):
     # action constants
     _MOVE_ACTIONS = {
         0: (0, -1),  # up
-        1: (0,  1),  # down
+        1: (0, 1),  # down
         2: (-1, 0),  # left
-        3: (1,  0),  # right
+        3: (1, 0),  # right
     }
     _RPS_ACTIONS = {4: Move.ROCK, 5: Move.PAPER, 6: Move.SCISSORS}
 
@@ -130,6 +136,7 @@ class RestrictedRPSEnv(gym.Env):
         budget: int = 4,
         grid_size: int = 20,
         challenge_radius: int = 1,
+        max_turns: int = 2000,
         render_mode: str | None = None,
         reward_config: RewardConfig | None = None,
     ):
@@ -139,6 +146,7 @@ class RestrictedRPSEnv(gym.Env):
         self.initial_budget = budget
         self.grid_size = grid_size
         self.challenge_radius = challenge_radius
+        self.max_turns = max_turns
         self.render_mode = render_mode
         self.reward_config = reward_config or RewardConfig()
 
@@ -147,20 +155,31 @@ class RestrictedRPSEnv(gym.Env):
 
         # observation space: nested dict
         g = grid_size - 1
-        player_space = spaces.Dict({
-            "stars":    spaces.Discrete(self._MAX_STARS + 1),
-            "budget":   spaces.Dict({
-                "rock":     spaces.Discrete(self._MAX_BUDGET + 1),
-                "paper":    spaces.Discrete(self._MAX_BUDGET + 1),
-                "scissors": spaces.Discrete(self._MAX_BUDGET + 1),
-            }),
-            "position": spaces.Tuple((spaces.Discrete(g + 1), spaces.Discrete(g + 1))),
-        })
-        self.observation_space = spaces.Dict({
-            "agent":           player_space,
-            "opponent":        player_space,
-            "opponents_alive": spaces.Discrete(self._MAX_OPS + 1),
-        })
+        player_space = spaces.Dict(
+            {
+                "player_id": spaces.Discrete(
+                    n_opponents + 1
+                ),  # 0=agent, 1..n=opponents
+                "stars": spaces.Discrete(self._MAX_STARS + 1),
+                "budget": spaces.Dict(
+                    {
+                        "rock": spaces.Discrete(self._MAX_BUDGET + 1),
+                        "paper": spaces.Discrete(self._MAX_BUDGET + 1),
+                        "scissors": spaces.Discrete(self._MAX_BUDGET + 1),
+                    }
+                ),
+                "position": spaces.Tuple(
+                    (spaces.Discrete(g + 1), spaces.Discrete(g + 1))
+                ),
+            }
+        )
+        self.observation_space = spaces.Dict(
+            {
+                "agent": player_space,
+                "opponent": player_space,
+                "opponents_alive": spaces.Discrete(self._MAX_OPS + 1),
+            }
+        )
 
         self._agent: Player | None = None
         self._opponents: list[Player] = []
@@ -196,7 +215,9 @@ class RestrictedRPSEnv(gym.Env):
     def _in_range(self, a: Player, b: Player) -> bool:
         return chebyshev(a.position, b.position) <= self.challenge_radius
 
-    def _clamp_move(self, pos: tuple[int, int], delta: tuple[int, int]) -> tuple[int, int]:
+    def _clamp_move(
+        self, pos: tuple[int, int], delta: tuple[int, int]
+    ) -> tuple[int, int]:
         x = max(0, min(self.grid_size - 1, pos[0] + delta[0]))
         y = max(0, min(self.grid_size - 1, pos[1] + delta[1]))
         return (x, y)
@@ -204,10 +225,11 @@ class RestrictedRPSEnv(gym.Env):
     def _player_obs(self, p: Player) -> PlayerObs:
         """Build the observation dict for a single player."""
         return {
-            "stars":    p.stars,
-            "budget":   {
-                "rock":     p.budget[Move.ROCK],
-                "paper":    p.budget[Move.PAPER],
+            "player_id": p.id,
+            "stars": p.stars,
+            "budget": {
+                "rock": p.budget[Move.ROCK],
+                "paper": p.budget[Move.PAPER],
                 "scissors": p.budget[Move.SCISSORS],
             },
             "position": p.position,
@@ -216,8 +238,9 @@ class RestrictedRPSEnv(gym.Env):
     def _null_opponent_obs(self) -> PlayerObs:
         """Zero-filled opponent obs returned when no opponents remain."""
         return {
-            "stars":    0,
-            "budget":   {"rock": 0, "paper": 0, "scissors": 0},
+            "player_id": 0,
+            "stars": 0,
+            "budget": {"rock": 0, "paper": 0, "scissors": 0},
             "position": (0, 0),
         }
 
@@ -232,8 +255,8 @@ class RestrictedRPSEnv(gym.Env):
             opponent_obs = self._null_opponent_obs()
 
         return {
-            "agent":           self._player_obs(ag),
-            "opponent":        opponent_obs,
+            "agent": self._player_obs(ag),
+            "opponent": opponent_obs,
             "opponents_alive": len(alive),
         }
 
@@ -247,7 +270,10 @@ class RestrictedRPSEnv(gym.Env):
             if p.id in paired or not p.is_alive():
                 continue
 
-            in_range = [q for q in alive if q is not p and self._in_range(p, q)]
+            # if the player is within the challenge_radius of an opponent
+            in_range = [
+                q for q in alive if q is not p and self._in_range(p, q)
+            ]
             if not in_range:
                 # no one nearby -- move randomly
                 delta = random.choice(list(self._MOVE_ACTIONS.values()))
@@ -255,9 +281,16 @@ class RestrictedRPSEnv(gym.Env):
                 continue
 
             accepted, _, op = p.select_opponent(in_range)
+            # if the challenge is accepted, and the op is not already paired with another agent
             if accepted and op is not None and op.id not in paired:
-                m1 = random.choice(p.available_moves())
-                m2 = random.choice(op.available_moves())
+                p_moves = p.available_moves()
+                op_moves = op.available_moves()
+                if not p_moves or not op_moves:
+                    delta = random.choice(list(self._MOVE_ACTIONS.values()))
+                    p.position = self._clamp_move(p.position, delta)
+                    continue
+                m1 = random.choice(p_moves)
+                m2 = random.choice(op_moves)
                 p.use_move(m1)
                 op.use_move(m2)
                 result = resolve(m1, m2)
@@ -276,6 +309,7 @@ class RestrictedRPSEnv(gym.Env):
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)
         self._make_players()
+        self._turn = 0
         obs = self._get_obs()
         info = {}
         if self.render_mode == "human":
@@ -292,21 +326,41 @@ class RestrictedRPSEnv(gym.Env):
         if self._agent.is_alive():
             if action in self._MOVE_ACTIONS:
                 # ── movement ────────────────────────────────────────────────────────────
+                alive = self._alive_opponents()
+                dist_before = min(
+                    (
+                        chebyshev(self._agent.position, op.position)
+                        for op in alive
+                    ),
+                    default=None,
+                )
                 self._agent.position = self._clamp_move(
                     self._agent.position, self._MOVE_ACTIONS[action]
                 )
+
+                if dist_before is not None:
+                    dist_after = min(
+                        chebyshev(self._agent.position, op.position)
+                        for op in alive
+                    )
+                    if dist_after < dist_before:
+                        reward += self.reward_config.approach_opponent
+                    if dist_after <= self.challenge_radius:
+                        reward += self.reward_config.within_challenge_range
             else:
                 # ── RPS matchup ──────────────────────────────────────────────────────────
                 move = self._RPS_ACTIONS[action]
                 in_range = [
-                    op for op in self._alive_opponents()
+                    op
+                    for op in self._alive_opponents()
                     if self._in_range(self._agent, op)
                 ]
 
                 if in_range and move in self._agent.available_moves():
                     op = random.choice(in_range)
-                    if op.accept_opponent(self._agent):
-                        op_move = random.choice(op.available_moves())
+                    op_moves = op.available_moves()
+                    if op.accept_opponent(self._agent) and op_moves:
+                        op_move = random.choice(op_moves)
                         self._agent.use_move(move)
                         op.use_move(op_move)
 
@@ -322,13 +376,22 @@ class RestrictedRPSEnv(gym.Env):
                         # REWARD: tie -- no stars change hands
                         else:
                             reward = self.reward_config.tie_matchup
-
+                else:
+                    reward = self.reward_config.invalid_move
         # ── opponent matchups ──────────────────────────────────────────────────────────────────
         self._run_opponent_matchups()
 
         # ── termination check ──────────────────────────────────────────────────────────────────
         alive = [p for p in [self._agent] + self._opponents if p.is_alive()]
 
+        # truncated is when the match is over based on defined max turns
+        truncated = (
+            self.max_turns is not None
+            and self._turn >= self.max_turns
+            and not terminated
+        )
+
+        ## round ends before truncation awards
         # REWARD: agent has run out of stars or moves -- eliminated from tournament
         if not self._agent.is_alive():
             reward += self.reward_config.eliminated
@@ -339,13 +402,27 @@ class RestrictedRPSEnv(gym.Env):
             reward += self.reward_config.victory
             terminated = True
             info["result"] = "victory"
+        elif not self._agent.has_cards() and self._agent.stars > 3:
+            reward += self.reward_config.victory
+            terminated = True
+            info["result"] = "victory"
+        ## round ends due to truncations (max turns hit)
+        if truncated:
+            if self._agent.has_cards():
+                reward += self.reward_config.has_cards_at_end
+            elif self._agent.stars < 3:
+                reward += self.reward_config.has_sub_3_stars_at_end
+            else:
+                reward += self.reward_config.victory
+                info["result"] = "victory"
+        self._turn += 1
 
         obs = self._get_obs()
 
         if self.render_mode == "human":
             self.render()
 
-        return obs, reward, terminated, False, info
+        return obs, reward, terminated, truncated, info
 
     def render(self):
         ag = self._agent

@@ -6,7 +6,7 @@ import pickle
 import numpy as np
 import sys
 
-env = RestrictedRPSEnv(n_opponents=4, stars=3, budget=4, grid_size=5)
+env = RestrictedRPSEnv(n_opponents=10, stars=3, budget=4, grid_size=12)
 
 BOLD = "\033[1m"  # ANSI escape sequence for bold text
 RESET = "\033[0m"  # ANSI escape sequence to reset text formatting
@@ -25,9 +25,12 @@ total_reward = 0.0
 def hash(obs: Observation) -> tuple:
     ag = obs["agent"]
     opp = obs["opponent"]
-    manhattan_dist = abs(ag["position"][0] - opp["position"][0]) + abs(
-        ag["position"][1] - opp["position"][1]
-    )
+    x_diff = opp["position"][0] - ag["position"][0]
+    y_diff = opp["position"][1] - ag["position"][1]
+    rel_dir = (
+        int(np.sign(x_diff)),
+        int(np.sign(y_diff)),
+    )  # (-1/0/1, -1/0/1) above/below/left/right
     key = (
         ag["stars"],
         ag["budget"]["rock"],
@@ -37,9 +40,8 @@ def hash(obs: Observation) -> tuple:
         opp["budget"]["rock"],
         opp["budget"]["paper"],
         opp["budget"]["scissors"],
-        manhattan_dist
-        <= 1,  # within 1 of agent
-        obs["opponents_alive"],
+        obs["opponent"]["player_id"],
+        rel_dir,
     )
     # print("key", key)
     return key
@@ -102,7 +104,7 @@ def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
             Q_update_counts[prev_state_key][action] += 1
 
             # update epsilon and end or continue w/ new step as prev
-            if terminated:
+            if terminated or truncated:
                 epsilon *= decay_rate
                 break
             else:
@@ -114,8 +116,8 @@ def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
 Run training if train_flag is set; otherwise, run evaluation using saved Q-table.
 """
 
-num_episodes = 1_000_000
-decay_rate = 0.999999
+num_episodes = 10_000
+decay_rate = 0.999
 if train_flag:
     Q_table = Q_learning(
         num_episodes=num_episodes,
