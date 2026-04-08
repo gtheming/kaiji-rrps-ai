@@ -1,11 +1,17 @@
 from __future__ import annotations
+
 import random
-import numpy
-from environment.move import Move, Direction, chebyshev
 from abc import ABC, abstractmethod
 from enum import Enum
 
+import numpy
+
+from environment.move import Move, Direction, chebyshev
+
+
 class PlayerType(Enum):
+    """Enumeration of supported player behavior types."""
+
     AGENT = "Agent"
     RANDOM = "Random"
     AGGRESSIVE = "Aggressive"
@@ -13,390 +19,520 @@ class PlayerType(Enum):
 
 
 class Player(ABC):
-    '''
-    Abstract representation of a player in a tournament
-    
-    Each player has a fixed move budget and number of stars
-    '''
+    """Abstract base class representing a player in the tournament.
+
+    Each player has:
+        - a unique player ID
+        - a star count
+        - a move budget for rock, paper, and scissors
+        - a board position
+    """
 
     rng = numpy.random.default_rng()
-    #===================== Universal =====================
-    '''
-    Instantiation
-    Args:
-        player_id   (int) the id of each player
-        stars       (int) the number of stars the player starts with
-        budget      (int) the number of each move the players start with
-    '''
-    def __init__(self, player_id: int, stars: int = 3, budget: int = 4, position: tuple[int, int] = (0, 0)):
-        self.id       = player_id
-        self.stars    = stars
-        self.budget   = {Move.ROCK: budget, Move.PAPER: budget, Move.SCISSORS: budget}
+
+    def __init__(
+        self,
+        player_id: int,
+        stars: int = 3,
+        budget: int = 4,
+        position: tuple[int, int] = (0, 0),
+    ) -> None:
+        """Initialize a player.
+
+        Args:
+            player_id: Unique identifier for the player.
+            stars: Starting number of stars.
+            budget: Starting count for each move type.
+            position: Starting board position as (x, y).
+        """
+        self.id = player_id
+        self.stars = stars
+        self.budget = {
+            Move.ROCK: budget,
+            Move.PAPER: budget,
+            Move.SCISSORS: budget,
+        }
         self.position = position
 
     def available_moves(self) -> list[Move]:
-        '''
-        A list containing the moves available
+        """Return the list of moves the player can still use.
 
-        Return:
-            list[Move]
-        '''
-        return [m for m, n in self.budget.items() if n > 0]
-    
+        Returns:
+            A list of moves with remaining budget greater than zero.
+        """
+        return [move for move, count in self.budget.items() if count > 0]
+
     def is_alive(self) -> bool:
-        '''
-        Determines if the player is still alive
+        """Return whether the player is still active.
 
-        Return:
-            bool
-        '''
+        A player is considered alive if they have at least one star and at
+        least one available move remaining.
+
+        Returns:
+            True if the player is alive, otherwise False.
+        """
         return self.stars > 0 and len(self.available_moves()) > 0
-    
-    def use_move(self, move: Move):
-        '''
-        Manages the move budget after an action
+
+    def use_move(self, move: Move) -> None:
+        """Consume one unit of budget for the given move.
+
         Args:
-            move (Move) the action taken by player
-        '''
+            move: The move being used.
+        """
         self.budget[move] -= 1
 
-    def steal_life(self, other: "Player"):
-       '''
-        Steals the other player's star
+    def steal_life(self, other: "Player") -> None:
+        """Take one star from another player.
+
         Args:
-            other   (Player) opponent star is being stolen from
-        '''
+            other: The player losing a star.
+        """
+        self.stars += 1
+        other.lose_life()
 
-       self.stars += 1
-       other.lose_life()
-
-    def lose_life(self):
-        '''
-        Deducts a star
-        '''
+    def lose_life(self) -> None:
+        """Reduce this player's star count by one."""
         self.stars -= 1
 
-    def _toward(self, target: Player) -> Direction:
-        '''
-        Finds the direction to get to a specified player
+    def _toward(self, target: "Player") -> Direction:
+        """Return the direction that moves this player toward a target.
+
         Args:
-            taget   (Player) the destination
-        Return:
-            Direction
-        '''
+            target: The player to move toward.
+
+        Returns:
+            The direction that best reduces the distance to the target.
+        """
         dx = numpy.sign(target.position[0] - self.position[0])
         dy = numpy.sign(target.position[1] - self.position[1])
-        # find the Direction whose value matches the delta
-        return min(Direction, key=lambda d: abs(d.value[0] - dx) + abs(d.value[1] - dy))
+        return min(
+            Direction,
+            key=lambda direction: abs(direction.value[0] - dx)
+            + abs(direction.value[1] - dy),
+        )
 
-    def _away(self, target: Player) -> Direction:
-        '''
-        Finds the direction to evade a player
+    def _away(self, target: "Player") -> Direction:
+        """Return the direction that moves this player away from a target.
+
         Args:
-            target  (Player) the avoided player
-        Return:
-            Direction
-        '''
+            target: The player to move away from.
+
+        Returns:
+            The direction that best increases separation from the target.
+        """
         dx = numpy.sign(self.position[0] - target.position[0])
         dy = numpy.sign(self.position[1] - target.position[1])
-        return min(Direction, key=lambda d: abs(d.value[0] - dx) + abs(d.value[1] - dy))
+        return min(
+            Direction,
+            key=lambda direction: abs(direction.value[0] - dx)
+            + abs(direction.value[1] - dy),
+        )
 
-    #===================== Abstract Methods =====================
-
-    
     @abstractmethod
-    def select_move(self, op: "Player" | None = None) -> Move: 
-        '''
-        Selects particular move from available moves based on specified player behavior
-        Args:
-            op          (Player) the opponent
+    def select_move(self, opponent: "Player" | None = None) -> Move:
+        """Choose a move to play.
 
-        Return:
-            Move
-        '''
+        Args:
+            opponent: The opposing player, if applicable.
+
+        Returns:
+            The selected move.
+        """
         ...
 
-    
     @abstractmethod
-    def select_opponent(self, in_range: list["Player"], all_alive: list ["Player"]) -> tuple[bool, list["Player"], "Player" | None]:
-        '''
-        Selects an opponent to challenge from avilable opponents in range based on player behavior
-        Args:
-            in_range    (list[Player]) list of players within challenge range
-            all_alive   (list[Player]) list of all players still involved
-        Return:
-            tuple[bool, list[Player, Player or None]
+    def select_opponent(
+        self,
+        available_opponents: list["Player"],
+        alive_players: list["Player"],
+    ) -> tuple[bool, list["Player"], "Player" | None]:
+        """Choose an opponent to challenge.
 
-        Return statement includes, in order; Whether challenge was accepted, 
-                                                new list of players without opponents, 
-                                                opponent or None if rejected
-        '''
-        ...
-    
-    @abstractmethod
-    def accept_opponent(self, opponent: "Player") -> bool: 
-        '''
-        Determines wether or not to accept a challenge based on player behavior
         Args:
-            oopponent   (Player) the player sending the challenge
-        Return:
-            bool
-        '''
+            available_opponents: Players currently in range to challenge.
+            alive_players: All players still active in the round.
+
+        Returns:
+            A tuple containing:
+                - whether the challenge was accepted
+                - the updated list of alive players excluding matched players
+                - the selected opponent, or None if no match occurred
+        """
         ...
 
-    
+    @abstractmethod
+    def accept_opponent(self, opponent: "Player") -> bool:
+        """Decide whether to accept a challenge.
+
+        Args:
+            opponent: The player issuing the challenge.
+
+        Returns:
+            True if the challenge is accepted, otherwise False.
+        """
+        ...
+
     @abstractmethod
     def get_playertype(self) -> PlayerType:
-        '''
-        Returns the player type from the enum
-        
-        Return:
-            PlayerType
-        '''
+        """Return this player's behavior type.
+
+        Returns:
+            The corresponding PlayerType enum value.
+        """
         ...
 
-    
     @abstractmethod
-    def select_direction(self, all_alive: list["Player"]) -> tuple[int, int]:
-        '''
-        Selects the direction to move based on PlayerType
+    def select_direction(self, alive_players: list["Player"]) -> Direction:
+        """Choose a movement direction.
+
         Args:
-            alive       (list[Player]) the list of alive opponents
-        Return
-            tuple[int, int]
-        '''
+            alive_players: All currently active players.
+
+        Returns:
+            The selected movement direction.
+        """
         ...
 
 
 class RandomPlayer(Player):
-    '''
-    Player with completely randomized behavior
+    """Player with randomized behavior.
 
-    * Opponent selection:   selects a random opponent from list of viable opponents
+    Behavior:
+        - Opponent selection: random available opponent
+        - Move selection: random available move
+        - Challenge acceptance: 80% chance to accept
+    """
 
-    * Move selection:       Selects a random move from remaining moveset
+    def select_move(self, opponent: Player | None = None) -> Move:
+        """Randomly select one available move.
 
-    * Accept opponent:      80% chance to accept a given opponent
-    '''
-    def select_move(self, op: Player) -> Move:
-        '''
-        Randomly selects a move from the set of available moves
+        Args:
+            opponent: The opposing player, unused.
 
-        Return
-            Move
-        '''
+        Returns:
+            A randomly selected available move.
+        """
         return random.choice(self.available_moves())
 
-    def select_opponent(self, in_range: list[Player], all_alive: list [Player]) -> tuple[bool, list[Player], Player | None]:
-        '''
-        Selects a random opponent from the provided list to 'battle'
-        If accepted, returns if accepted and list without them, and opponent selected
-        Cannot select self as opponent
+    def select_opponent(
+        self,
+        available_opponents: list[Player],
+        alive_players: list[Player],
+    ) -> tuple[bool, list[Player], Player | None]:
+        """Randomly choose an opponent from those in range.
+
         Args:
-            all_alive (list[Players]) list of opponents
+            available_opponents: Players currently in challenge range.
+            alive_players: All players still active in the round.
 
-        Return
-            tuple[bool, list[Player], Player]
-        '''
-        # if no one avaiable abort
-        if not in_range:
-            return False, all_alive, None
-        
-        # challenge random opponent
-        op = random.choice(in_range)
-        if op.accept_opponent(self):
-            return True, [p for p in all_alive if p is not op and p is not self], op
-        
-        # if rejected abort
-        return False, all_alive, None
+        Returns:
+            A tuple containing:
+                - whether the challenge was accepted
+                - the updated alive-player list
+                - the selected opponent, or None if no challenge occurred
+        """
+        if not available_opponents:
+            return False, alive_players, None
 
-    def accept_opponent(self, challenger: Player) -> bool:
-        '''
-        Decides wether to accept a challenge with probability 0.8 yes
+        opponent = random.choice(available_opponents)
+        if opponent.accept_opponent(self):
+            remaining_players = [
+                player
+                for player in alive_players
+                if player is not opponent and player is not self
+            ]
+            return True, remaining_players, opponent
 
-        Return
-            bool
-        '''
+        return False, alive_players, None
+
+    def accept_opponent(self, opponent: Player) -> bool:
+        """Accept a challenge with 80% probability.
+
+        Args:
+            opponent: The player issuing the challenge.
+
+        Returns:
+            True with probability 0.8, otherwise False.
+        """
         return bool(self.rng.choice([True, False], p=[0.8, 0.2]))
-    
-    def get_playertype(self) -> PlayerType:
-        '''
-        Returns Enum of player type
 
-        Return
-            PlayerType
-        '''
+    def get_playertype(self) -> PlayerType:
+        """Return the player type.
+
+        Returns:
+            PlayerType.RANDOM.
+        """
         return PlayerType.RANDOM
-    
-    def select_direction(self, all_alive: list[Player]) -> tuple[int, int]:
-        '''
-        Decides a random direction for the player to move
-        '''
+
+    def select_direction(self, alive_players: list[Player]) -> Direction:
+        """Choose a random movement direction.
+
+        Args:
+            alive_players: All currently active players, unused.
+
+        Returns:
+            A randomly selected direction.
+        """
         return random.choice(list(Direction))
-    
-'''
-The agent being trained
 
-* Opponent and movement selection are handled externally and should not be called
 
-* Agent should always accept opponent
-'''
 class AgentPlayer(Player):
-    def select_move(self, op: Player | None) -> Move:
-        # Agent moves are driven externally via env.step(action)
-        # This fallback should never be called during normal training
-        raise NotImplementedError("AgentPlayer moves are controlled by the environment")
-    
-    def select_opponent(self, in_range: list[Player], all_alive: list [Player]) -> tuple[bool, list[Player], Player | None]:
-        # Agent challenges are also handled externally in step()
-        raise NotImplementedError("AgentPlayer challenges are controlled by the environment")
+    """Player controlled externally by the environment.
 
-    def accept_opponent(self, challenger: Player) -> bool:
-        # Agent always accepts — the environment handles this interaction
+    Opponent selection and movement are not handled here.
+    The agent always accepts challenges.
+    """
+
+    def select_move(self, opponent: Player | None = None) -> Move:
+        """Raise an error because move selection is environment-controlled.
+
+        Args:
+            opponent: The opposing player, if applicable.
+
+        Raises:
+            NotImplementedError: Always.
+        """
+        raise NotImplementedError(
+            "AgentPlayer moves are controlled by the environment"
+        )
+
+    def select_opponent(
+        self,
+        available_opponents: list[Player],
+        alive_players: list[Player],
+    ) -> tuple[bool, list[Player], Player | None]:
+        """Raise an error because opponent selection is environment-controlled.
+
+        Args:
+            available_opponents: Players currently in challenge range.
+            alive_players: All players still active in the round.
+
+        Raises:
+            NotImplementedError: Always.
+        """
+        raise NotImplementedError(
+            "AgentPlayer challenges are controlled by the environment"
+        )
+
+    def accept_opponent(self, opponent: Player) -> bool:
+        """Always accept a challenge.
+
+        Args:
+            opponent: The player issuing the challenge.
+
+        Returns:
+            Always True.
+        """
         return True
-    
+
     def get_playertype(self) -> PlayerType:
+        """Return the player type.
+
+        Returns:
+            PlayerType.AGENT.
+        """
         return PlayerType.AGENT
-    
-    def select_direction(self, all_alive: list[Player]):
-        # Agent moves are driven externally via env.step(action)
-        # This fallback should never be called during normal training
-        raise NotImplementedError("AgentPlayer moves are controlled by the environment")
 
-'''
-Aggressive player
+    def select_direction(self, alive_players: list[Player]) -> Direction:
+        """Raise an error because movement is environment-controlled.
 
-* select_opponent(): Finds the player with the most stars
-'''
+        Args:
+            alive_players: All currently active players.
+
+        Raises:
+            NotImplementedError: Always.
+        """
+        raise NotImplementedError(
+            "AgentPlayer moves are controlled by the environment"
+        )
+
+
 class AggressivePlayer(Player):
-    
-    def select_move(self, op: "Player" | None = None) -> Move: 
-        '''
-        Selects the move it has the most left of
+    """Player that prefers stronger engagement.
+
+    Behavior:
+        - Move selection: move with the highest remaining budget
+        - Opponent selection: opponent in range with the most stars
+        - Challenge acceptance: always accept
+        - Movement: move toward the nearest player
+    """
+
+    def select_move(self, opponent: Player | None = None) -> Move:
+        """Select the move with the highest remaining budget.
+
         Args:
-            op          (Player) the opponent
+            opponent: The opposing player, unused.
 
-        Return:
-            Move
-        '''
-        return max(self.budget, key=lambda m: self.budget[m])
+        Returns:
+            The move with the highest remaining count.
+        """
+        return max(self.budget, key=lambda move: self.budget[move])
 
-    def select_opponent(self, in_range: list[Player], all_alive: list [Player]) -> tuple[bool, list[Player], Player | None]:
-        '''
-        Targets opponent with highest starcount in range
+    def select_opponent(
+        self,
+        available_opponents: list[Player],
+        alive_players: list[Player],
+    ) -> tuple[bool, list[Player], Player | None]:
+        """Choose the in-range opponent with the most stars.
+
         Args:
-            in_range    (list[Player]) list of players within challenge range
-            all_alive   (list[Player]) list of all players still involved
-        Return:
-            tuple[bool, list[Player, Player or None]
+            available_opponents: Players currently in challenge range.
+            alive_players: All players still active in the round.
 
-        Return statement includes, in order; Whether challenge was accepted, 
-                                                new list of players without opponents, 
-                                                opponent or None if rejected
-        '''
-        if not in_range:
-            return False, all_alive, None
-        
-        op = max(in_range, key=lambda x: x.stars)
+        Returns:
+            A tuple containing:
+                - whether the challenge was accepted
+                - the updated alive-player list
+                - the selected opponent, or None if no challenge occurred
+        """
+        if not available_opponents:
+            return False, alive_players, None
 
-        if op.accept_opponent(self):
-            return True, [p for p in all_alive if p is not op and p is not self], op
-        
-        return False, all_alive, None
+        opponent = max(available_opponents, key=lambda player: player.stars)
 
-    def accept_opponent(self, opponent: Player) -> bool: 
-        '''
-        Always accepts a challenger
+        if opponent.accept_opponent(self):
+            remaining_players = [
+                player
+                for player in alive_players
+                if player is not opponent and player is not self
+            ]
+            return True, remaining_players, opponent
+
+        return False, alive_players, None
+
+    def accept_opponent(self, opponent: Player) -> bool:
+        """Always accept a challenge.
+
         Args:
-            oopponent   (Player) the player sending the challenge
-        Return:
-            bool
-        '''
+            opponent: The player issuing the challenge.
+
+        Returns:
+            Always True.
+        """
         return True
- 
+
     def get_playertype(self) -> PlayerType:
-        '''
-        Returns the player type from the enum
-        
-        Return:
-            PlayerType
-        '''
+        """Return the player type.
+
+        Returns:
+            PlayerType.AGGRESSIVE.
+        """
         return PlayerType.AGGRESSIVE
 
-    def select_direction(self, all_alive: list[Player]) -> Direction:
-        '''
-        Moves towards closest player
+    def select_direction(self, alive_players: list[Player]) -> Direction:
+        """Move toward the nearest player.
+
         Args:
-            alive       (list[Player]) the list of alive opponents
-        Return
-            tuple[int, int]
-        '''
-        target = min(all_alive, key=lambda p: chebyshev(self.position, p.position))
+            alive_players: All currently active players.
+
+        Returns:
+            The direction toward the nearest player.
+        """
+        target = min(
+            alive_players,
+            key=lambda player: chebyshev(self.position, player.position),
+        )
         return self._toward(target)
-    
+
 
 class ConservativePlayer(Player):
-    def select_move(self, op: "Player" | None = None) -> Move: 
-        '''
-        Selects the move it has the most left of
+    """Player that avoids unnecessary risk.
+
+    Behavior:
+        - Move selection: move with the highest remaining budget
+        - Opponent selection: opponent in range with the fewest stars
+        - Challenge acceptance:
+            * 30% random chance to accept
+            * otherwise accept only if this player has at least as many stars
+        - Movement:
+            * move toward weaker or equal opponents
+            * move away from stronger opponents
+    """
+
+    def select_move(self, opponent: Player | None = None) -> Move:
+        """Select the move with the highest remaining budget.
+
         Args:
-            op          (Player) the opponent
+            opponent: The opposing player, unused.
 
-        Return:
-            Move
-        '''
-        return max(self.budget, key=lambda m: self.budget[m])
+        Returns:
+            The move with the highest remaining count.
+        """
+        return max(self.budget, key=lambda move: self.budget[move])
 
-    def select_opponent(self, in_range: list[Player], all_alive: list [Player]) -> tuple[bool, list[Player], Player | None]:
-        '''
-        Targets opponent with lowest starcount in range
+    def select_opponent(
+        self,
+        available_opponents: list[Player],
+        alive_players: list[Player],
+    ) -> tuple[bool, list[Player], Player | None]:
+        """Choose the in-range opponent with the fewest stars.
+
         Args:
-            in_range    (list[Player]) list of players within challenge range
-            all_alive   (list[Player]) list of all players still involved
-        Return:
-            tuple[bool, list[Player, Player or None]
+            available_opponents: Players currently in challenge range.
+            alive_players: All players still active in the round.
 
-        Return statement includes, in order; Whether challenge was accepted, 
-                                                new list of players without opponents, 
-                                                opponent or None if rejected
-        '''
-        if not in_range:
-            return False, all_alive, None
-        
-        op = min(in_range, key=lambda x: x.stars)
+        Returns:
+            A tuple containing:
+                - whether the challenge was accepted
+                - the updated alive-player list
+                - the selected opponent, or None if no challenge occurred
+        """
+        if not available_opponents:
+            return False, alive_players, None
 
-        if op.accept_opponent(self):
-            return True, [p for p in all_alive if p is not op and p is not self], op
-        
-        return False, all_alive, None
+        opponent = min(available_opponents, key=lambda player: player.stars)
 
-    def accept_opponent(self, opponent: Player) -> bool: 
-        '''
-        Only accepts if has more stars (0.3 chance accepting regardless)
+        if opponent.accept_opponent(self):
+            remaining_players = [
+                player
+                for player in alive_players
+                if player is not opponent and player is not self
+            ]
+            return True, remaining_players, opponent
+
+        return False, alive_players, None
+
+    def accept_opponent(self, opponent: Player) -> bool:
+        """Decide whether to accept a challenge.
+
+        Acceptance rule:
+            - 30% chance to accept regardless
+            - otherwise accept only if this player has at least as many stars
+              as the challenger
+
         Args:
-            oopponent   (Player) the player sending the challenge
-        Return:
-            bool
-        '''
+            opponent: The player issuing the challenge.
+
+        Returns:
+            True if the challenge is accepted, otherwise False.
+        """
         if numpy.random.choice([True, False], p=[0.3, 0.7]):
             return True
-        
+
         return self.stars >= opponent.stars
- 
+
     def get_playertype(self) -> PlayerType:
-        '''
-        Returns the player type from the enum
-        
-        Return:
-            PlayerType
-        '''
+        """Return the player type.
+
+        Returns:
+            PlayerType.CONSERVATIVE.
+        """
         return PlayerType.CONSERVATIVE
 
-    def select_direction(self, all_alive: list[Player]) -> Direction:
-        '''
-        Moves away from nearest player unless they have fewer or equal stars
-        '''
-        target = min(all_alive, key=lambda p: chebyshev(self.position, p.position))
+    def select_direction(self, alive_players: list[Player]) -> Direction:
+        """Move relative to the nearest player based on star advantage.
+
+        Args:
+            alive_players: All currently active players.
+
+        Returns:
+            A direction toward the nearest player if this player is at least as
+            strong, otherwise a direction away from that player.
+        """
+        target = min(
+            alive_players,
+            key=lambda player: chebyshev(self.position, player.position),
+        )
         if self.stars >= target.stars:
             return self._toward(target)
         return self._away(target)
