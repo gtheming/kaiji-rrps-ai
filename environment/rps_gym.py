@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import TypedDict
 import gymnasium as gym
 from gymnasium import spaces
-from environment.player import Player
+from environment.player import Player, RandomPlayer, AgentPlayer
 from environment.move import Move
 
 
@@ -174,14 +174,14 @@ class RestrictedRPSEnv(gym.Env):
         )
 
     def _make_players(self):
-        self._agent = Player(
+        self._agent = AgentPlayer(
             player_id=0,
             stars=self.initial_stars,
             budget=self.initial_budget,
             position=self._random_position(),
         )
         self._opponents = [
-            Player(
+            RandomPlayer(
                 player_id=i + 1,
                 stars=self.initial_stars,
                 budget=self.initial_budget,
@@ -256,8 +256,8 @@ class RestrictedRPSEnv(gym.Env):
 
             accepted, _, op = p.select_opponent(in_range)
             if accepted and op is not None and op.id not in paired:
-                m1 = random.choice(p.available_moves())
-                m2 = random.choice(op.available_moves())
+                m1 = p.select_move(op)
+                m2 = op.select_move(p)
                 p.use_move(m1)
                 op.use_move(m2)
                 result = resolve(m1, m2)
