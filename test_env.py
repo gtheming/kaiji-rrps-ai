@@ -34,7 +34,7 @@ def run_episode(env: RestrictedRPSEnv, policy: str = "random", verbose: bool = T
             legal_actions = list(env._MOVE_ACTIONS.keys())
             # add RPS actions for non-exhausted moves
             for rps_action, move in env._RPS_ACTIONS.items():
-                if move in env._agent.available_moves():
+                if move in env._agent.available_cards():
                     legal_actions.append(rps_action)
             action = int(np.random.choice(legal_actions))
         else:

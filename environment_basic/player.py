@@ -6,8 +6,7 @@ from enum import Enum
 
 import numpy
 
-from environment.move import Move, Direction, chebyshev
-
+from environment_basic.move import Move, Direction, chebyshev
 
 class PlayerType(Enum):
     """Enumeration of supported player behavior types."""
@@ -53,8 +52,13 @@ class Player(ABC):
             Move.SCISSORS: budget,
         }
         self.position = position
+
     def has_cards(self):
-        return len(self.available_cards()) > 0 
+        return len(self.available_cards()) > 0
+
+    def move(self, x: int, y: int) -> tuple[int, int]:
+        self.position = (x, y)
+        return (x, y)
 
     def available_cards(self) -> list[Move]:
         """Return the list of moves the player can still use.
@@ -74,7 +78,7 @@ class Player(ABC):
         """
         return self.stars > 0
 
-    def use_move(self, move: Move) -> None:
+    def use_card(self, move: Move) -> None:
         """Consume one unit of budget for the given move.
 
         Args:
@@ -82,7 +86,7 @@ class Player(ABC):
         """
         self.budget[move] -= 1
 
-    def steal_life(self, other: "Player") -> None:
+    def steal_star(self, other: "Player") -> None:
         """Take one star from another player.
 
         Args:
@@ -133,7 +137,7 @@ class Player(ABC):
         return len(self.available_cards()) > 0
 
     @abstractmethod
-    def select_move(self, opponent: "Player" | None = None) -> Move:
+    def select_card(self, opponent: "Player" | None = None) -> Move:
         """Choose a move to play.
 
         Args:
@@ -165,7 +169,7 @@ class Player(ABC):
         ...
 
     @abstractmethod
-    def accept_opponent(self, opponent: "Player") -> bool:
+    def accept_challenge(self, opponent: "Player") -> bool:
         """Decide whether to accept a challenge.
 
         Args:
@@ -198,91 +202,6 @@ class Player(ABC):
         ...
 
 
-class RandomPlayer(Player):
-    """Player with randomized behavior.
-
-    Behavior:
-        - Opponent selection: random available opponent
-        - Move selection: random available move
-        - Challenge acceptance: 80% chance to accept
-    """
-
-    def select_move(self, opponent: Player | None = None) -> Move:
-        """Randomly select one available move.
-
-        Args:
-            opponent: The opposing player, unused.
-
-        Returns:
-            A randomly selected available move.
-        """
-
-        return random.choice(self.available_cards())
-
-    def challenge_opponent(
-        self,
-        available_opponents: list[Player],
-        alive_players: list[Player],
-    ) -> tuple[bool, list[Player], Player | None]:
-        """Randomly choose an opponent from those in range.
-
-        Args:
-            available_opponents: Players currently in challenge range.
-            alive_players: All players still active in the round.
-
-        Returns:
-            A tuple containing:
-                - whether the challenge was accepted
-                - the updated alive-player list
-                - the selected opponent, or None if no challenge occurred
-        """
-        if not available_opponents or not self.has_cards():
-            return False, alive_players, None
-
-        opponent = random.choice(available_opponents)
-        if opponent.accept_opponent(self):
-            remaining_players = [
-                player
-                for player in alive_players
-                if player is not opponent and player is not self
-            ]
-            return True, remaining_players, opponent
-
-        return False, alive_players, None
-
-    def accept_opponent(self, opponent: Player) -> bool:
-        """Accept a challenge with 80% probability.
-
-        Args:
-            opponent: The player issuing the challenge.
-
-        Returns:
-            True with probability 0.8, otherwise False.
-        """
-        if not self.has_cards():
-            return False
-        return bool(self.rng.choice([True, False], p=[0.8, 0.2]))
-
-    def get_playertype(self) -> PlayerType:
-        """Return the player type.
-
-        Returns:
-            PlayerType.RANDOM.
-        """
-        return PlayerType.RANDOM
-
-    def select_direction(self, alive_players: list[Player]) -> Direction:
-        """Choose a random movement direction.
-
-        Args:
-            alive_players: All currently active players, unused.
-
-        Returns:
-            A randomly selected direction.
-        """
-        return random.choice(list(Direction))
-
-
 class AgentPlayer(Player):
     """Player controlled externally by the environment.
 
@@ -290,7 +209,7 @@ class AgentPlayer(Player):
     The agent always accepts challenges.
     """
 
-    def select_move(self, opponent: Player | None = None) -> Move:
+    def select_card(self, opponent: Player | None = None) -> Move:
         """Raise an error because move selection is environment-controlled.
 
         Args:
@@ -321,7 +240,7 @@ class AgentPlayer(Player):
             "AgentPlayer challenges are controlled by the environment"
         )
 
-    def accept_opponent(self, opponent: Player) -> bool:
+    def accept_challenge(self, opponent: Player) -> bool:
         """Always accept a challenge.
 
         Args:
@@ -356,33 +275,33 @@ class AgentPlayer(Player):
         )
 
 
-class AggressivePlayer(Player):
-    """Player that prefers stronger engagement.
+class RandomPlayer(Player):
+    """Player with randomized behavior.
 
     Behavior:
-        - Move selection: move with the highest remaining budget
-        - Opponent selection: opponent in range with the most stars
-        - Challenge acceptance: always accept
-        - Movement: move toward the nearest player
+        - Opponent selection: random available opponent
+        - Move selection: random available move
+        - Challenge acceptance: 80% chance to accept
     """
 
-    def select_move(self, opponent: Player | None = None) -> Move:
-        """Select the move with the highest remaining budget.
+    def select_card(self, opponent: Player | None = None) -> Move:
+        """Randomly select one available move.
 
         Args:
             opponent: The opposing player, unused.
 
         Returns:
-            The move with the highest remaining count.
+            A randomly selected available move.
         """
-        return max(self.budget, key=lambda move: self.budget[move])
+
+        return random.choice(self.available_cards())
 
     def challenge_opponent(
         self,
         available_opponents: list[Player],
         alive_players: list[Player],
     ) -> tuple[bool, list[Player], Player | None]:
-        """Choose the in-range opponent with the most stars.
+        """Randomly choose an opponent from those in range.
 
         Args:
             available_opponents: Players currently in challenge range.
@@ -397,9 +316,8 @@ class AggressivePlayer(Player):
         if not available_opponents or not self.has_cards():
             return False, alive_players, None
 
-        opponent = max(available_opponents, key=lambda player: player.stars)
-
-        if opponent.accept_opponent(self):
+        opponent = random.choice(available_opponents)
+        if opponent.accept_challenge(self):
             remaining_players = [
                 player
                 for player in alive_players
@@ -409,144 +327,34 @@ class AggressivePlayer(Player):
 
         return False, alive_players, None
 
-    def accept_opponent(self, opponent: Player) -> bool:
-        """Always accept a challenge.
+    def accept_challenge(self, opponent: Player) -> bool:
+        """Accept a challenge with 80% probability.
 
         Args:
             opponent: The player issuing the challenge.
 
         Returns:
-            Always True.
+            True with probability 0.8, otherwise False.
         """
         if not self.has_cards():
             return False
-
-        return True
+        return bool(self.rng.choice([True, False], p=[0.8, 0.2]))
 
     def get_playertype(self) -> PlayerType:
         """Return the player type.
 
         Returns:
-            PlayerType.AGGRESSIVE.
+            PlayerType.RANDOM.
         """
-        return PlayerType.AGGRESSIVE
+        return PlayerType.RANDOM
 
     def select_direction(self, alive_players: list[Player]) -> Direction:
-        """Move toward the nearest player.
+        """Choose a random movement direction.
 
         Args:
-            alive_players: All currently active players.
+            alive_players: All currently active players, unused.
 
         Returns:
-            The direction toward the nearest player.
+            A randomly selected direction.
         """
-        target = min(
-            alive_players,
-            key=lambda player: chebyshev(self.position, player.position),
-        )
-        return self._toward(target)
-
-
-class ConservativePlayer(Player):
-    """Player that avoids unnecessary risk.
-
-    Behavior:
-        - Move selection: move with the highest remaining budget
-        - Opponent selection: opponent in range with the fewest stars
-        - Challenge acceptance:
-            * 30% random chance to accept
-            * otherwise accept only if this player has at least as many stars
-        - Movement:
-            * move toward weaker or equal opponents
-            * move away from stronger opponents
-    """
-
-    def select_move(self, opponent: Player | None = None) -> Move:
-        """Select the move with the highest remaining budget.
-
-        Args:
-            opponent: The opposing player, unused.
-
-        Returns:
-            The move with the highest remaining count.
-        """
-        return max(self.budget, key=lambda move: self.budget[move])
-
-    def challenge_opponent(
-        self,
-        available_opponents: list[Player],
-        alive_players: list[Player],
-    ) -> tuple[bool, list[Player], Player | None]:
-        """Choose the in-range opponent with the fewest stars.
-
-        Args:
-            available_opponents: Players currently in challenge range.
-            alive_players: All players still active in the round.
-
-        Returns:
-            A tuple containing:
-                - whether the challenge was accepted
-                - the updated alive-player list
-                - the selected opponent, or None if no challenge occurred
-        """
-        if not available_opponents or not self.has_cards():
-            return False, alive_players, None
-
-        opponent = min(available_opponents, key=lambda player: player.stars)
-
-        if opponent.accept_opponent(self):
-            remaining_players = [
-                player
-                for player in alive_players
-                if player is not opponent and player is not self
-            ]
-            return True, remaining_players, opponent
-
-        return False, alive_players, None
-
-    def accept_opponent(self, opponent: Player) -> bool:
-        """Decide whether to accept a challenge.
-
-        Acceptance rule:
-            - 30% chance to accept regardless
-            - otherwise accept only if this player has at least as many stars
-              as the challenger
-
-        Args:
-            opponent: The player issuing the challenge.
-
-        Returns:
-            True if the challenge is accepted, otherwise False.
-        """
-        if not self.has_cards():
-            return False
-        if numpy.random.choice([True, False], p=[0.3, 0.7]):
-            return True
-
-        return self.stars >= opponent.stars
-
-    def get_playertype(self) -> PlayerType:
-        """Return the player type.
-
-        Returns:
-            PlayerType.CONSERVATIVE.
-        """
-        return PlayerType.CONSERVATIVE
-
-    def select_direction(self, alive_players: list[Player]) -> Direction:
-        """Move relative to the nearest player based on star advantage.
-
-        Args:
-            alive_players: All currently active players.
-
-        Returns:
-            A direction toward the nearest player if this player is at least as
-            strong, otherwise a direction away from that player.
-        """
-        target = min(
-            alive_players,
-            key=lambda player: chebyshev(self.position, player.position),
-        )
-        if self.stars >= target.stars:
-            return self._toward(target)
-        return self._away(target)
+        return random.choice(list(Direction))
