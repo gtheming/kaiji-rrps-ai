@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from typing import TypedDict
 import gymnasium as gym
 from gymnasium import spaces
-from environment_basic.player import Player, RandomPlayer, AgentPlayer
-from environment_basic.move import Move, chebyshev
+from environment_core.player import Player, BasicPlayer, AgentPlayer
+from environment_core.move import Move, chebyshev
 
 
 class BudgetObs(TypedDict):
@@ -29,7 +29,7 @@ class Observation(TypedDict):
 @dataclass
 class RewardConfig:
     victory: float = 500
-    loss: float = 500
+    loss: float = -500
     invalid_move: float = -10
 
 
@@ -188,7 +188,7 @@ class RestrictedRPSEnv(gym.Env):
             position=self._random_position(),
         )
 
-        player_types = [RandomPlayer]
+        player_types = [BasicPlayer]
 
         self._opponents = [
             random.choice(player_types)(

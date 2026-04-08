@@ -6,7 +6,8 @@ from enum import Enum
 
 import numpy
 
-from environment_basic.move import Move, Direction, chebyshev
+from environment_core.move import Move, Direction, chebyshev
+
 
 class PlayerType(Enum):
     """Enumeration of supported player behavior types."""
@@ -275,13 +276,13 @@ class AgentPlayer(Player):
         )
 
 
-class RandomPlayer(Player):
-    """Player with randomized behavior.
+class BasicPlayer(Player):
+    """Player moves towards nearest player and challenges them.
 
     Behavior:
-        - Opponent selection: random available opponent
-        - Move selection: random available move
-        - Challenge acceptance: 80% chance to accept
+        - Opponent selection: Select nearest player
+        - Move selection: Select nearest player
+        - Challenge acceptance: Always accepts
     """
 
     def select_card(self, opponent: Player | None = None) -> Move:
@@ -301,7 +302,7 @@ class RandomPlayer(Player):
         available_opponents: list[Player],
         alive_players: list[Player],
     ) -> tuple[bool, list[Player], Player | None]:
-        """Randomly choose an opponent from those in range.
+        """Challenge the nearest opponent in range.
 
         Args:
             available_opponents: Players currently in challenge range.
@@ -316,7 +317,10 @@ class RandomPlayer(Player):
         if not available_opponents or not self.has_cards():
             return False, alive_players, None
 
-        opponent = random.choice(available_opponents)
+        opponent = min(
+            available_opponents,
+            key=lambda p: chebyshev(self.position, p.position),
+        )
         if opponent.accept_challenge(self):
             remaining_players = [
                 player
@@ -328,17 +332,15 @@ class RandomPlayer(Player):
         return False, alive_players, None
 
     def accept_challenge(self, opponent: Player) -> bool:
-        """Accept a challenge with 80% probability.
+        """Always accept a challenge.
 
         Args:
             opponent: The player issuing the challenge.
 
         Returns:
-            True with probability 0.8, otherwise False.
+            True if this player has cards, otherwise False.
         """
-        if not self.has_cards():
-            return False
-        return bool(self.rng.choice([True, False], p=[0.8, 0.2]))
+        return self.has_cards()
 
     def get_playertype(self) -> PlayerType:
         """Return the player type.
@@ -349,12 +351,18 @@ class RandomPlayer(Player):
         return PlayerType.RANDOM
 
     def select_direction(self, alive_players: list[Player]) -> Direction:
-        """Choose a random movement direction.
+        """Move toward the nearest player.
 
         Args:
-            alive_players: All currently active players, unused.
+            alive_players: All currently active players.
 
         Returns:
-            A randomly selected direction.
+            The direction that best closes distance to the nearest player.
         """
-        return random.choice(list(Direction))
+        others = [p for p in alive_players if p is not self]
+        if not others:
+            return random.choice(list(Direction))
+        nearest = min(
+            others, key=lambda p: chebyshev(self.position, p.position)
+        )
+        return self._toward(nearest)

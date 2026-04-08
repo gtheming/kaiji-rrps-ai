@@ -3,8 +3,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pygame
 import time
-from environment_basic.rps_gym import RestrictedRPSEnv
-from environment_basic.move import Move
+from environment_core.rps_gym import RestrictedRPSEnv
+from environment_core.move import Move
 
 CELL_SIZE = 40
 CONSOLE_WIDTH = 350
