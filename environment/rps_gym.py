@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import TypedDict
 import gymnasium as gym
 from gymnasium import spaces
-from environment.player import Player, RandomPlayer, AgentPlayer, AggressivePlayer, ConservativePlayer
+from environment.player import Player, RandomPlayer, AgentPlayer, AggressivePlayer, ConservativePlayer, EquilibriumPlayer, ScaredPlayer
 from environment.move import Move, chebyshev
 
 
@@ -195,7 +195,7 @@ class RestrictedRPSEnv(gym.Env):
             position=self._random_position(),
         )
 
-        player_types = [RandomPlayer, AggressivePlayer, ConservativePlayer]
+        player_types = [RandomPlayer, AggressivePlayer, ConservativePlayer, EquilibriumPlayer, ScaredPlayer]
 
         self._opponents = [
             random.choice(player_types)(

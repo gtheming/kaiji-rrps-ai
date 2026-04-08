@@ -16,6 +16,8 @@ class PlayerType(Enum):
     RANDOM = "Random"
     AGGRESSIVE = "Aggressive"
     CONSERVATIVE = "Conservative"
+    EQUILIBRIUM = "Equilibrium"
+    SCARED = "Scared"
 
 
 class Player(ABC):
@@ -540,4 +542,196 @@ class ConservativePlayer(Player):
         )
         if self.stars >= target.stars:
             return self._toward(target)
+        return self._away(target)
+
+class EquilibriumPlayer(Player):
+    """Player that is trying to maintain 3 stars and get rid of cards.
+
+    Behavior:
+    
+        - Move selection: move that will even out number of each card   
+        - Opponent selection: opponent in range with closest to 3 stars.
+        - Challenge acceptance: low acceptance unless number of stars is close to 3
+        - Movement: move toward the nearest player if stars <= 3 and has stars.
+    """
+
+    def select_move(self, opponent: Player | None = None) -> Move:
+        """Select the move with the highest remaining budget to even out card counts.
+
+        Args:
+            opponent: The opposing player, unused.
+
+        Returns:
+            The move with the highest remaining count.
+        """
+        return max(self.budget, key=lambda move: self.budget[move])
+
+    def select_opponent(
+        self,
+        available_opponents: list[Player],
+        alive_players: list[Player],
+    ) -> tuple[bool, list[Player], Player | None]:
+        """Choose the in-range opponent whose star count is closest to 3.
+
+        Args:
+            available_opponents: Players currently in challenge range.
+            alive_players: All players still active in the round.
+
+        Returns:
+            A tuple containing:
+                - whether the challenge was accepted
+                - the updated alive-player list
+                - the selected opponent, or None if no challenge occurred
+        """
+        if not available_opponents:
+            return False, alive_players, None
+
+        opponent = min(available_opponents, key=lambda player: abs(player.stars - 3))
+
+        if opponent.accept_opponent(self):
+            remaining_players = [
+                player
+                for player in alive_players
+                if player is not opponent and player is not self
+            ]
+            return True, remaining_players, opponent
+
+        return False, alive_players, None
+
+    def accept_opponent(self, opponent: Player) -> bool:
+        """Decide whether to accept a challenge.
+
+        Acceptance rule:
+            - Base 10% chance to accept
+            - Scales up to 100% as this player's stars approach 3, using
+              a linear ramp over the range [0, 3]
+
+        Args:
+            opponent: The player issuing the challenge.
+
+        Returns:
+            True if the challenge is accepted, otherwise False.
+        """
+        proximity = 1.0 - (abs(self.stars - 3) / 3)
+        accept_probability = 0.1 + 0.9 * proximity
+        return numpy.random.choice([True, False], p=[accept_probability, 1 - accept_probability])
+
+    def get_playertype(self) -> PlayerType:
+        """Return the player type.
+
+        Returns:
+            PlayerType.EQUILIBRIUM.
+        """
+        return PlayerType.EQUILIBRIUM
+
+    def select_direction(self, alive_players: list[Player]) -> Direction:
+        """Move toward the nearest player if this player has 3 or fewer stars.
+
+        Args:
+            alive_players: All currently active players.
+
+        Returns:
+            A direction toward the nearest player if stars <= 3,
+            otherwise a direction away from that player.
+        """
+        target = min(
+            alive_players,
+            key=lambda player: chebyshev(self.position, player.position),
+        )
+        if self.stars <= 3:
+            return self._toward(target)
+        return self._away(target)
+
+class ScaredPlayer(Player):
+    """Player that avoids engagement with low chance to participate.
+
+    Behavior:
+        - Move selection: move with the lowest remaining budget
+        - Opponent selection: opponent in range with the least stars
+        - Challenge acceptance: decline with a low chance of 30% to accept
+        - Movement: move away from all players
+    """
+
+    def select_move(self, opponent: Player | None = None) -> Move:
+        """Select the move with the lowest remaining budget.
+
+        Args:
+            opponent: The opposing player, unused.
+
+        Returns:
+            The move with the lowest remaining count.
+        """
+        usable_budget = {}
+        for move in self.budget:
+            if self.budget[move] > 0:
+                usable_budget[move] = self.budget[move]
+        return min(usable_budget, key=lambda move: usable_budget[move])
+
+    def select_opponent(
+        self,
+        available_opponents: list[Player],
+        alive_players: list[Player],
+    ) -> tuple[bool, list[Player], Player | None]:
+        """Choose the in-range opponent with the fewest stars.
+
+        Args:
+            available_opponents: Players currently in challenge range.
+            alive_players: All players still active in the round.
+
+        Returns:
+            A tuple containing:
+                - whether the challenge was accepted
+                - the updated alive-player list
+                - the selected opponent, or None if no challenge occurred
+        """
+        if not available_opponents:
+            return False, alive_players, None
+
+        opponent = min(available_opponents, key=lambda player: player.stars)
+
+        if opponent.accept_opponent(self):
+            remaining_players = [
+                player
+                for player in alive_players
+                if player is not opponent and player is not self
+            ]
+            return True, remaining_players, opponent
+
+        return False, alive_players, None
+
+    def accept_opponent(self, opponent: Player) -> bool:
+        """Decide whether to accept a challenge.
+
+        Acceptance rule:
+            - 30% chance to accept, 70% chance to decline.
+
+        Args:
+            opponent: The player issuing the challenge.
+
+        Returns:
+            True if the challenge is accepted, otherwise False.
+        """
+        return numpy.random.choice([True, False], p=[0.3, 0.7])
+
+    def get_playertype(self) -> PlayerType:
+        """Return the player type.
+
+        Returns:
+            PlayerType.SCARED.
+        """
+        return PlayerType.SCARED
+
+    def select_direction(self, alive_players: list[Player]) -> Direction:
+        """Move away from the nearest player.
+
+        Args:
+            alive_players: All currently active players.
+
+        Returns:
+            A direction away from the nearest player.
+        """
+        target = min(
+            alive_players,
+            key=lambda player: chebyshev(self.position, player.position),
+        )
         return self._away(target)
