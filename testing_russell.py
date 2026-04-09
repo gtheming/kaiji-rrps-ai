@@ -92,17 +92,21 @@ def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
             if new_state_key not in Q_table:
                 Q_table[new_state_key] = np.zeros(env.action_space.n)
 
-            # calculate Q vals
+            # calculate TD Targets
             Q_old_update_counts = Q_update_counts[prev_state_key][action]
             Q_old = Q_table[prev_state_key][action]
-            V_opt_old = np.max(Q_table[new_state_key])
             eta = 1 / (1 + Q_old_update_counts)
-            Q_new = (1 - eta) * Q_old + eta * (reward + gamma * V_opt_old)
+
+            if terminated or truncated:
+                target = reward
+            else:
+                target = reward + gamma * np.max(Q_table[new_state_key])
 
             # update table
+            Q_new = (1 - eta) * Q_old + eta * target
             Q_table[prev_state_key][action] = Q_new
             Q_update_counts[prev_state_key][action] += 1
-
+            
             # update epsilon and end or continue w/ new step as prev
             if terminated or truncated:
                 epsilon *= decay_rate
