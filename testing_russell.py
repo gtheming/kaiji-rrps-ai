@@ -22,6 +22,31 @@ terminated = False
 total_reward = 0.0
 
 
+def count_in_range_opponents(env) -> int:
+    return sum(
+        1
+        for op in env._opponents
+        if op.is_alive() and env._in_range(env._agent, op)
+    )
+
+
+def get_legal_actions(env, obs: Observation) -> list[int]:
+    """
+    Movement always allowed.
+    R/P/S is only allowed if:
+    - at least one opponent is in range
+    - the corresponding move still has budget left
+    """
+    legal = list(env._MOVE_ACTIONS.keys())
+
+    if count_in_range_opponents(env) > 0:
+        for action, move in env._RPS_ACTIONS.items():
+            if move in env._agent.available_cards():
+                legal.append(action)
+
+    return legal
+
+
 def hash(obs: Observation) -> tuple:
     ag = obs["agent"]
     opp = obs["opponent"]
@@ -100,13 +125,18 @@ def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
             if terminated or truncated:
                 target = reward
             else:
-                target = reward + gamma * np.max(Q_table[new_state_key])
+                next_legal_actions = get_legal_actions(env, new_obs)
+                if next_legal_actions:
+                    next_best = max(Q_table[new_state_key][a] for a in next_legal_actions)
+                else:
+                    next_best = 0.0
+                target = reward + gamma * next_best
 
             # update table
             Q_new = (1 - eta) * Q_old + eta * target
             Q_table[prev_state_key][action] = Q_new
             Q_update_counts[prev_state_key][action] += 1
-            
+
             # update epsilon and end or continue w/ new step as prev
             if terminated or truncated:
                 epsilon *= decay_rate
