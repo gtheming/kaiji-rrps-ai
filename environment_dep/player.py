@@ -6,7 +6,7 @@ from enum import Enum
 
 import numpy
 
-from environment.move import Move, Direction, chebyshev
+from environment_dep.move import Move, Direction, chebyshev
 
 
 class PlayerType(Enum):

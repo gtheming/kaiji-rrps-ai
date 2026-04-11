@@ -3,14 +3,14 @@ from dataclasses import dataclass
 from typing import TypedDict
 import gymnasium as gym
 from gymnasium import spaces
-from environment.player import (
+from environment_dep.player import (
     Player,
     RandomPlayer,
     AgentPlayer,
     AggressivePlayer,
     ConservativePlayer,
 )
-from environment.move import Move, chebyshev
+from environment_dep.move import Move, chebyshev
 
 
 class BudgetObs(TypedDict):

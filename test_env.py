@@ -3,7 +3,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
-from environment.rps_gym import RestrictedRPSEnv
+from environment_dep.rps_gym import RestrictedRPSEnv
 
 # action labels for logging
 _ACTION_LABELS = {
