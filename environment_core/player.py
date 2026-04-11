@@ -111,11 +111,11 @@ class Player(ABC):
         """
         dx = numpy.sign(target.position[0] - self.position[0])
         dy = numpy.sign(target.position[1] - self.position[1])
-        return min(
-            Direction,
-            key=lambda direction: abs(direction.value[0] - dx)
-            + abs(direction.value[1] - dy),
+        best_score = min(
+            abs(d.value[0] - dx) + abs(d.value[1] - dy) for d in Direction
         )
+        best = [d for d in Direction if abs(d.value[0] - dx) + abs(d.value[1] - dy) == best_score]
+        return random.choice(best)
 
     def _away(self, target: "Player") -> Direction:
         """Return the direction that moves this player away from a target.
@@ -269,7 +269,7 @@ class AgentPlayer(Player):
             alive_players: All currently active players.
 
         Raises:
-            NotImplementedError: Always.
+            NotImplementedErfror: Always.
         """
         raise NotImplementedError(
             "AgentPlayer moves are controlled by the environment"
@@ -284,6 +284,9 @@ class BasicPlayer(Player):
         - Move selection: Select nearest player
         - Challenge acceptance: Always accepts
     """
+
+    def is_alive(self) -> bool:
+        return self.stars > 0 and self.has_cards()
 
     def select_card(self, opponent: Player | None = None) -> Move:
         """Randomly select one available move.

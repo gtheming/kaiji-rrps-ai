@@ -30,6 +30,8 @@ class Observation(TypedDict):
 class RewardConfig:
     victory: float = 500
     loss: float = -500
+    win_match: float = 50
+    lose_match: float = -50
     invalid_move: float = -10
 
 
@@ -266,6 +268,9 @@ class RestrictedRPSEnv(gym.Env):
                 for q in alive
                 if q is not p and q.is_alive() and self._in_range(p, q)
             ]
+            # include the agent as a valid combat target
+            if self._agent.is_alive() and self._in_range(p, self._agent):
+                in_range.append(self._agent)
 
             if not in_range:
                 needs_move.append(p)
@@ -277,7 +282,14 @@ class RestrictedRPSEnv(gym.Env):
             # if accepted battle, otherwise added to move set
             if accepted and op is not None and op.id not in paired:
                 m1 = p.select_card(op)
-                m2 = op.select_card(p)
+                # agent card is chosen randomly from available cards
+                if op is self._agent:
+                    if not self._agent.has_cards():
+                        needs_move.append(p)
+                        continue
+                    m2 = random.choice(self._agent.available_cards())
+                else:
+                    m2 = op.select_card(p)
                 p.use_card(m1)
                 op.use_card(m2)
                 result = resolve(m1, m2)
@@ -286,6 +298,7 @@ class RestrictedRPSEnv(gym.Env):
                     p.steal_star(op)
                 elif result == -1:
                     op.steal_star(p)
+
                 paired.update({p.id, op.id})
             else:
                 needs_move.append(p)
@@ -298,7 +311,9 @@ class RestrictedRPSEnv(gym.Env):
             if not p.is_alive() or p.id in paired:
                 continue
 
-            delta = p.select_direction(alive)
+            # include agent as a movement target so opponents chase the agent
+            all_targets = alive + ([self._agent] if self._agent.is_alive() else [])
+            delta = p.select_direction(all_targets)
             if self._can_move(p.position, delta.value):
                 p.position = (
                     p.position[0] + delta.value[0],
@@ -364,8 +379,10 @@ class RestrictedRPSEnv(gym.Env):
                         result = resolve(agent_card_choice, op_card_choice)
                         if result == 1:
                             self._agent.steal_star(op)
+                            reward += self.reward_config.win_match
                         elif result == -1:
                             op.steal_star(self._agent)
+                            reward += self.reward_config.lose_match
 
         # ── opponent matchups ──────────────────────────────────────────────────────────────────
         self._run_opponent_matchups()
@@ -386,6 +403,10 @@ class RestrictedRPSEnv(gym.Env):
         # REWARD: agent has run out of stars or moves -- eliminated from tournament
 
         if not self._agent.is_alive():
+            reward += self.reward_config.loss
+            terminated = True
+            info["result"] = "eliminated"
+        elif not self._agent.has_cards() and self._agent.stars <= 3:
             reward += self.reward_config.loss
             terminated = True
             info["result"] = "eliminated"
