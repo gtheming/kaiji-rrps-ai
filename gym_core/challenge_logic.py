@@ -41,8 +41,8 @@ def build_challenge_table(table: PlayerTable) -> ChallengeTable:
 
 
    for pid in table:
-       card = _select_card(pid, table)
-       targets = _rank_opponents(pid, table)
+       card = _select_move(pid, table) if pid is not 0 else _agent_select_move(pid, table)
+       targets = _rank_opponents(pid, table) if pid is not 0 else _agent_rank_opponents(table, pid)
        for target_id in targets:
            rows.append({
                "player_id": pid,
