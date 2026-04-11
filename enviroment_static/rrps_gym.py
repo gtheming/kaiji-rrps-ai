@@ -65,10 +65,7 @@ class RestrictedRPSEnv(gym.Env):
             "rock_total": 1,
             "scissors_total": 1,
         },
-        grid_size: int = 20,
-        challenge_radius: int = 1,
-        max_turns: int = 2000,
-        render_mode: str | None = None,
+        max_turns: int = 500,
         reward_config: RewardConfig | None = None,
     ):
         super().__init__()
@@ -76,10 +73,7 @@ class RestrictedRPSEnv(gym.Env):
         self.initial_stars = stars
         self.initial_agent_budget = agent_budget
         self.initial_player_budget = player_budget
-        self.grid_size = grid_size
-        self.challenge_radius = challenge_radius
         self.max_turns = max_turns
-        self.render_mode = render_mode
         self.reward_config = reward_config or RewardConfig()
 
         # observation space
@@ -91,7 +85,7 @@ class RestrictedRPSEnv(gym.Env):
         self.action_space = gym.spaces.Discrete((self.n_players - 1) * 3)
 
         self._action_to_challenge = [
-            {0: Card.PAPER, 1: Card.ROCK, 2: Card.SCISSORS}
+            {0: Card.paper, 1: Card.paper, 2: Card.paper}
             for _ in range(self.n_players - 1)
         ]
         #
@@ -135,7 +129,7 @@ class RestrictedRPSEnv(gym.Env):
 
     def _get_info(self) -> Info:
 
-        return
+        return {}
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)
@@ -146,6 +140,13 @@ class RestrictedRPSEnv(gym.Env):
         info = {}
         return obs, info
 
+    def action_resolve(self, action):
+        """converts action space
+        0..3 will be one player so action//3 = playerId
+        0..3 will be rock paper scissors so action%3 = card"""
+
+        return action // 3, self._action_to_challenge[action % 3]
+
     def step(self, action: int):
         assert self.action_space.contains(action), f"Invalid action: {action}"
 
@@ -155,6 +156,7 @@ class RestrictedRPSEnv(gym.Env):
         info = {}
 
         obs = self._get_obs()
+        info = self._get_info()
 
         return obs, reward, terminated, truncated, info
 
