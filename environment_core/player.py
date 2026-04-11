@@ -76,7 +76,7 @@ class Player(ABC):
         Returns:
             True if the player is alive, otherwise False.
         """
-        return self.stars > 0
+        return self.stars > 0 or not self.has_cards()
 
     def use_card(self, move: Move) -> None:
         """Consume one unit of budget for the given move.
@@ -260,6 +260,16 @@ class AgentPlayer(Player):
         raise NotImplementedError(
             "AgentPlayer moves are controlled by the environment"
         )
+
+    def is_alive(self) -> bool:
+        """Return whether the player is still active.
+
+        A player is considered alive if they have at least one star
+
+        Returns:
+            True if the player is alive, otherwise False.
+        """
+        return self.stars > 0
 
 
 class BasicPlayer(Player):

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import TypedDict
+import math
 import gymnasium as gym
 from gymnasium import spaces
 from environment_core.player import Player, BasicPlayer, AgentPlayer
@@ -28,9 +29,11 @@ class Observation(TypedDict):
 
 @dataclass
 class RewardConfig:
-    victory: float = 500
-    loss: float = -500
-    invalid_move: float = -10
+    victory: int = 500
+    loss: int = -500
+    matchup_win: int = 100
+    matchup_loss: int = 100
+    invalid_move: int = -10
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────────────
@@ -110,7 +113,6 @@ class RestrictedRPSEnv(gym.Env):
         2: (-1, 0),  # left
         3: (1, 0),   # right
     }
-    _RPS_ACTIONS = {4: Move.ROCK, 5: Move.PAPER, 6: Move.SCISSORS}
 
     def __init__(
         self,
@@ -139,8 +141,9 @@ class RestrictedRPSEnv(gym.Env):
         # budget never increases, so initial value is the max
         max_budget = budget
 
-        # action space: 4 move directions + 3 RPS moves
-        self.action_space = spaces.Discrete(self.n_opponents * 3 + 4)
+        # action space: 4 move directions + 3 RPS moves (against nearest in-range opponent)
+        self.action_space = spaces.Discrete(7)
+        self._RPS_ACTIONS = {4: Move.ROCK, 5: Move.PAPER, 6: Move.SCISSORS}
         # observation space: nested dict
         g = grid_size - 1
         player_space = spaces.Dict(
@@ -183,18 +186,24 @@ class RestrictedRPSEnv(gym.Env):
             player_id=0,
             stars=self.initial_stars,
             budget=self.initial_budget,
-            position=self._random_position(),
+            position=(self.grid_size // 2, self.grid_size // 2),
         )
+        g = self.grid_size - 1
+        cols = math.ceil(math.sqrt(self.n_opponents))
+        rows = math.ceil(self.n_opponents / cols)
         self._opponents = [
             BasicPlayer(
                 player_id=i + 1,
                 stars=self.initial_stars,
                 budget=self.initial_budget,
-                position=self._random_position(),
+                position=(
+                    round((i % cols) * g / max(cols - 1, 1)),
+                    round((i // cols) * g / max(rows - 1, 1)),
+                ),
             )
             for i in range(self.n_opponents)
         ]
-        self.matchup_table = MatchupTable([*self._opponents, self._agent])
+        self.matchup_table = MatchupTable()
 
     def _alive_opponents(self) -> list[Player]:
         return [p for p in self._opponents if p.is_alive()]
@@ -265,8 +274,9 @@ class RestrictedRPSEnv(gym.Env):
 
         reward = 0.0
         terminated = False
-        info = {}
+        info: dict = {"matchups": [], "step": 0}
         self._turn += 1
+        info["step"] += 1
         paired: set[int] = set()
 
         all_alive = [
@@ -309,21 +319,15 @@ class RestrictedRPSEnv(gym.Env):
             else:
                 agent_card = self._RPS_ACTIONS[action]
                 in_range = [
-                    op
-                    for op in self._alive_opponents()
+                    op for op in self._alive_opponents()
                     if self._in_range(self._agent, op)
                 ]
-                if (
-                    not in_range
-                    or agent_card not in self._agent.available_cards()
-                ):
+                if not in_range or agent_card not in self._agent.available_cards():
                     reward += self.reward_config.invalid_move
                 else:
                     target = min(
                         in_range,
-                        key=lambda p: chebyshev(
-                            self._agent.position, p.position
-                        ),
+                        key=lambda p: chebyshev(self._agent.position, p.position),
                     )
                     # Accept if target already challenged the agent; otherwise initiate
                     incoming = self.matchup_table.get_incoming(self._agent)
@@ -338,11 +342,22 @@ class RestrictedRPSEnv(gym.Env):
                         result = resolve(challenger_card, agent_card)
                         if result == 1:
                             challenger.steal_star(self._agent)
+                            reward += self.reward_config.loss
+                            winner = f"Player {challenger.id}"
                         elif result == -1:
                             self._agent.steal_star(challenger)
+                            reward += self.reward_config.matchup_win
+                            winner = "Agent"
+                        else:
+                            winner = "tie"
                         paired.update({self._agent.id, challenger.id})
-                        info["player_card"] = agent_card
-                        info["opponent_card"] = challenger_card
+                        info["matchups"].append({
+                            "challenger": f"Player {challenger.id}",
+                            "defender": "Agent",
+                            "challenger_card": challenger_card,
+                            "defender_card": agent_card,
+                            "winner": winner,
+                        })
                     else:
                         self.matchup_table.challenge(
                             self._agent, agent_card, target
@@ -370,11 +385,28 @@ class RestrictedRPSEnv(gym.Env):
                     p.use_card(p_card)
                     challenger.use_card(challenger_card)
                     result = resolve(challenger_card, p_card)
+                    challenger_name = "Agent" if challenger is self._agent else f"Player {challenger.id}"
+                    defender_name = f"Player {p.id}"
                     if result == 1:
                         challenger.steal_star(p)
+                        if challenger is self._agent:
+                            reward += self.reward_config.matchup_win
+                        winner = challenger_name
                     elif result == -1:
                         p.steal_star(challenger)
+                        if challenger is self._agent:
+                            reward += self.reward_config.loss
+                        winner = defender_name
+                    else:
+                        winner = "tie"
                     paired.update({p.id, challenger.id})
+                    info["matchups"].append({
+                        "challenger": challenger_name,
+                        "defender": defender_name,
+                        "challenger_card": challenger_card,
+                        "defender_card": p_card,
+                        "winner": winner,
+                    })
                     accepted = True
                     break
             if not accepted:
@@ -430,6 +462,15 @@ class RestrictedRPSEnv(gym.Env):
             else:
                 reward += self.reward_config.victory
                 info["result"] = "victory"
+
+        info["matchup_table"] = [
+            {
+                "challenger": "Agent" if c is self._agent else f"Player {c.id}",
+                "card": card,
+                "defender": "Agent" if t is self._agent else f"Player {t.id}",
+            }
+            for c, (card, t) in self.matchup_table.challenges.items()
+        ]
 
         obs = self._get_obs()
 

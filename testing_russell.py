@@ -26,24 +26,25 @@ total_reward = 0.0
 def hash(obs: Observation) -> tuple:
     ag = obs["agent"]
     opp = obs["opponent"]
-    x_diff = opp["position"][0] - ag["position"][0]
-    y_diff = opp["position"][1] - ag["position"][1]
-    rel_dx = np.sign(opp["position"][0] - ag["position"][0])  # -1, 0, 1
-    rel_dy = np.sign(opp["position"][1] - ag["position"][1])  # -1, 0, 1
-    key = (
+    dx = opp["position"][0] - ag["position"][0]
+    dy = opp["position"][1] - ag["position"][1]
+    in_range = max(abs(dx), abs(dy)) <= env.challenge_radius
+    return (
+        # agent state
         ag["stars"],
         ag["budget"]["rock"],
         ag["budget"]["paper"],
         ag["budget"]["scissors"],
+        # nearest opponent state
+        in_range,
         opp["stars"],
         opp["budget"]["rock"] > 0,
         opp["budget"]["paper"] > 0,
         opp["budget"]["scissors"] > 0,
-        rel_dx,  
-        rel_dy,
+        # movement guidance
+        int(np.sign(dx)),
+        int(np.sign(dy)),
     )
-    # print("key", key)
-    return key
 
 
 def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
@@ -81,6 +82,26 @@ def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
 
             # transition to state s'
             new_obs, reward, terminated, truncated, info = env.step(action)
+            if info["matchup_table"]:
+                print(f"  Turn {env._turn:>4}")
+                # key by challenger AND by defender to catch mutual challenges
+                resolved_by_challenger = {m["challenger"]: m for m in info["matchups"]}
+                resolved_by_defender = {m["defender"]: m for m in info["matchups"]}
+                for c in info["matchup_table"]:
+                    m = resolved_by_challenger.get(c["challenger"]) or \
+                        resolved_by_defender.get(c["challenger"])
+                    if m:
+                        print(
+                            f"    {c['challenger']} ({c['card'].name}) → {c['defender']}: "
+                            f"ACCEPTED  {m['challenger_card'].name} vs {m['defender_card'].name}"
+                            f" → {m['winner']} wins"
+                        )
+                    else:
+                        print(
+                            f"    {c['challenger']} ({c['card'].name}) → {c['defender']}:"
+                            f" REFUSED"
+                        )
+
             if gui_flag:
                 vis.refresh(obs, reward, terminated, info, delay=0.1)
             new_state_key = hash(new_obs)
@@ -115,7 +136,7 @@ def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
 Run training if train_flag is set; otherwise, run evaluation using saved Q-table.
 """
 
-num_episodes = 1_000_000
+num_episodes = 20_000
 decay_rate = 0.999
 if train_flag:
     Q_table = Q_learning(
