@@ -5,10 +5,10 @@ from typing import TypedDict
 import gymnasium as gym
 from gymnasium import spaces
 import pandas as pd
+import pandera.pandas as pa
 import numpy as np
 
-from gym_core.matchup_table import MatchupDict
-from gym_core.challenge_table import ChallengeTable
+from gym_core.challenge_table import ChallengeTable, ChallengeSchema
 from gym_core.observation import Observation
 from gym_core.cards import Card
 from gym_core.info import Info
@@ -20,14 +20,14 @@ from gym_core.matchup_table import MatchupPair, MatchupDict
 class RewardConfig:
     win_matchup: float = 100
     lose_matchup: float = -100
-    tie_matchup: float = 10
-    eliminated: float = -300
+    tie_matchup: float = -10
+    eliminated: float = -1000
     victory: float = 500
     invalid_move: float = -1
     within_challenge_range: float = 1
     approach_opponent: float = 0.5
-    has_cards_at_end: float = -500
-    has_sub_3_stars_at_end: float = -500
+    has_cards_at_end: float = -200
+    has_sub_3_stars_at_end: float = -300
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────────────
@@ -60,9 +60,9 @@ class RestrictedRPSEnv(gym.Env):
             "scissors_total": 3,
         },
         player_budget: Budget = {
-            "paper_total": 0,
-            "rock_total": 0,
-            "scissors_total": 9,
+            "paper_total": 3,
+            "rock_total": 3,
+            "scissors_total": 3,
         },
         max_turns: int = 500,
         reward_config: RewardConfig | None = None,
@@ -199,7 +199,7 @@ class RestrictedRPSEnv(gym.Env):
 
 
         df = pd.DataFrame(rows, columns=["player_id", "card", "priority", "target_id"])
-        return ChallengeTable.validate(df)
+        return ChallengeSchema.validate(df)
     
     def resolve_challenges(self, table: PlayerDict, challenge_table: ChallengeTable) -> MatchupDict:
         prefs: dict[PlayerID, list[PlayerID]] = (
@@ -302,14 +302,14 @@ class RestrictedRPSEnv(gym.Env):
 
             # reward based on matchup result
             if agent_stars_after > agent_stars_before:
-                reward += self.reward_config.win_matchup
+                reward += (self.reward_config.win_matchup * self.player_dict[0]["stars_total"])
             elif agent_stars_after < agent_stars_before:
                 reward += self.reward_config.lose_matchup
             else:
                 reward += self.reward_config.tie_matchup
 
-            # update alive_dict
-            self._update_alive()
+        # update alive_dict
+        self._update_alive()
 
         # check termination
         if 0 not in self.alive_dict:

@@ -5,15 +5,31 @@ import sys
 import pickle
 from gym_core.observation import Observation
 
-env = RestrictedRPSEnv(n_opponents=4, stars=3)
+env = RestrictedRPSEnv(n_opponents=3, stars=3)
 train_flag = "train" in sys.argv
-gui_flag = "gui" in sys.argv
 
 
 def hash(obs: Observation) -> tuple:
-    return tuple(
-        (pid, player["stars_total"])
-        for pid, player in sorted(obs["player_dict"].items())
+    agent = obs["player_dict"][0]
+    opponents = sorted(
+        ((pid, p) for pid, p in obs["player_dict"].items() if pid != 0),
+        key=lambda x: x[0]
+    )
+    opponent_state = tuple(
+        (
+            p["stars_total"],
+            p["rock_total"] > 0,
+            p["paper_total"] > 0,
+            p["scissors_total"] > 0,
+        )
+        for _, p in opponents
+    )
+    return (
+        agent["stars_total"],
+        agent["rock_total"],
+        agent["paper_total"],
+        agent["scissors_total"],
+        opponent_state,
     )
 
 
@@ -23,7 +39,7 @@ def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
 
     Parameters:
     - num_episodes (int): Number of episodes to run.
-    - gamma (float): Discount factor.
+    - gamma (float): Discount factor. 
     - epsilon (float): Exploration rate.
     - decay_rate (float): Rate at which epsilon decays. Epsilon should be decayed as epsilon = epsilon * decay_rate after each episode.
 
@@ -34,8 +50,8 @@ def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
     Q_update_counts = {}
 
     for _ in tqdm(range(num_episodes)):
-        start_obs = env.reset()
-        prev_state_key = hash(start_obs[0])
+        start_obs, _ = env.reset()
+        prev_state_key = hash(start_obs)
         if prev_state_key not in Q_update_counts:
             Q_update_counts[prev_state_key] = np.zeros(env.action_space.n)
         if prev_state_key not in Q_table:
@@ -52,10 +68,7 @@ def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
 
             # transition to state s'
             new_obs, reward, terminated, truncated, info = env.step(action)
-            # if gui_flag:
-            #     vis.refresh(obs, reward, terminated, info, delay=0.1)
             new_state_key = hash(new_obs)
-            print(new_state_key)
             ## initalize state action if not already
             if new_state_key not in Q_update_counts:
                 Q_update_counts[new_state_key] = np.zeros(env.action_space.n)
@@ -86,8 +99,8 @@ def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
 Run training if train_flag is set; otherwise, run evaluation using saved Q-table.
 """
 
-num_episodes = 1_000_000
-decay_rate = 0.999
+num_episodes = 100_000
+decay_rate = 0.9999
 if train_flag:
     Q_table = Q_learning(
         num_episodes=num_episodes,
@@ -113,6 +126,9 @@ def softmax(x, temp=1.0):
 if not train_flag:
 
     rewards = []
+    wins = 0
+    losses = 0
+    truncations = 0
 
     filename = (
         "Q_table_" + str(num_episodes) + "_" + str(decay_rate) + ".pickle"
@@ -127,7 +143,8 @@ if not train_flag:
         obs, info = env.reset()
         total_reward = 0
         terminated = False
-        while not terminated:
+        truncated = False
+        while not terminated and not truncated:
             state = hash(obs)
             try:
                 action = np.random.choice(
@@ -141,12 +158,19 @@ if not train_flag:
             obs, reward, terminated, truncated, info = env.step(action)
 
             total_reward += reward
-            # if gui_flag:
-            # vis.refresh(
-            #     obs, reward, terminated, info, delay=0.1
-            # )  # Update the game screen [GUI only]
+
+        if len(env.alive_dict) == 1 and 0 in env.alive_dict:
+            wins+= 1
+        elif 0 not in env.alive_dict:
+            losses += 1
+        else:
+            truncations += 1
 
         # print("Total reward:", total_reward)
-    rewards.append(total_reward)
+        rewards.append(total_reward)
     avg_reward = sum(rewards) / len(rewards)
-    print("avg_reward", avg_reward)
+    total = len(rewards)
+    print(f"avg_reward: {avg_reward:.2f}")
+    print(f"win rate:   {wins/total*100:.1f}%  ({wins}/{total})")
+    print(f"loss rate:  {losses/total*100:.1f}%  ({losses}/{total})")
+    print(f"truncated:  {truncations/total*100:.1f}%  ({truncations}/{total})")
