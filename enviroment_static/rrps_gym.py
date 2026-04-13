@@ -21,10 +21,10 @@ from gym_core.matchup_table import MatchupPair, MatchupDict
 class RewardConfig:
     win_matchup: float = 100
     lose_matchup: float = -100
-    tie_matchup: float = -10
-    eliminated: float = -1000
-    victory: float = 500
-    invalid_move: float = -1
+    tie_matchup: float = 10
+    eliminated: float = -500
+    victory: float = 2000
+    invalid_move: float = -10
     within_challenge_range: float = 1
     approach_opponent: float = 0.5
     has_cards_at_end: float = -200
