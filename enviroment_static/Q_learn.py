@@ -143,8 +143,7 @@ if not train_flag:
         obs, info = env.reset()
         total_reward = 0
         terminated = False
-        truncated = False
-        while not terminated and not truncated:
+        while not terminated:
             state = hash(obs)
             try:
                 action = np.random.choice(

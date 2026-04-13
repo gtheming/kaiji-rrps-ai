@@ -8,6 +8,7 @@ import pandas as pd
 import pandera.pandas as pa
 import numpy as np
 
+from gym_core.matchup_table import MatchupDict
 from gym_core.challenge_table import ChallengeTable, ChallengeSchema
 from gym_core.observation import Observation
 from gym_core.cards import Card
@@ -105,10 +106,17 @@ class RestrictedRPSEnv(gym.Env):
 
     def _initialize_players(self):
         self.player_dict = {
-            0: {**self.initial_agent_budget, "stars_total": self.initial_stars}}
-        self.player_dict.update({
-            i: {**self.initial_player_budget, "stars_total": self.initial_stars}
-            for i in range(1, self.n_players)})
+            0: {**self.initial_agent_budget, "stars_total": self.initial_stars}
+        }
+        self.player_dict.update(
+            {
+                i: {
+                    **self.initial_player_budget,
+                    "stars_total": self.initial_stars,
+                }
+                for i in range(1, self.n_players)
+            }
+        )
         self.alive_dict = dict(self.player_dict)
 
     def _get_obs(self) -> Observation:
@@ -139,72 +147,97 @@ class RestrictedRPSEnv(gym.Env):
         target_pid = list(self.player_dict.keys())[action // 3 + 1]
         card = self._action_to_card[action % 3]
         return target_pid, card
-    
+
     def _update_alive(self):
         self.alive_dict = {
-            pid: player for pid, player in self.player_dict.items()
-            if player["stars_total"] > 0 and sum(player[c.value] for c in Card) > 0
+            pid: player
+            for pid, player in self.player_dict.items()
+            if player["stars_total"] > 0
+            and sum(player[c.value] for c in Card) > 0
         }
 
-    # preference gen ============================
     # all players passed in through PlayerDict MUST be eligible to play (cards remaining)
-
-
-    def _rank_opponents(self, pid: PlayerID, table: PlayerDict) -> list[PlayerID]:
+    
+    def _rank_opponents(
+        self, pid: PlayerID, table: PlayerDict
+    ) -> list[PlayerID]:
         candidates = [oid for oid in table if oid != pid]
         return random.sample(candidates, min(3, len(candidates)))
 
-    #TODO
-    def _agent_rank_opponents(self, pid: PlayerID, table: PlayerDict) -> list[PlayerID]:
+    # TODO
+    def _agent_rank_opponents(
+        self, pid: PlayerID, table: PlayerDict
+    ) -> list[PlayerID]:
         candidates = [oid for oid in table if oid != pid]
         return random.sample(candidates, min(3, len(candidates)))
-
 
     def _select_move(self, pid: PlayerID, table: PlayerDict) -> Card:
         available = [card for card in Card if table[pid][card.value] > 0]
         return random.choice(available)
 
-    #TODO
+    # TODO
     def _agent_select_move(self, pid: PlayerID, table: PlayerDict) -> Card:
         available = [card for card in Card if table[pid][card.value] > 0]
         return random.choice(available)
-    
-    def _get_card(self, pid: PlayerID, challenge_table: ChallengeTable) -> Card:
+
+    def _get_card(
+        self, pid: PlayerID, challenge_table: ChallengeTable
+    ) -> Card:
         row = challenge_table.loc[challenge_table["player_id"] == pid].iloc[0]
         return Card(row["card"])
 
-    def build_challenge_table(self, table: PlayerDict,
-                               agent_card: Card | None = None, 
-                               agent_target: PlayerID | None = None
-                               ) -> ChallengeTable:
+    def build_challenge_table(
+        self,
+        table: PlayerDict,
+        agent_card: Card | None = None,
+        agent_target: PlayerID | None = None,
+    ) -> ChallengeTable:
         rows: list[dict] = []
-
 
         for pid in table:
             if pid == 0:
-                card = agent_card if agent_card is not None else self._agent_select_move(pid, table)
-                targets = [agent_target] + self._agent_rank_opponents(pid, table) if agent_target is not None else self._agent_rank_opponents(pid, table)
+                card = (
+                    agent_card
+                    if agent_card is not None
+                    else self._agent_select_move(pid, table)
+                )
+                targets = (
+                    [agent_target] + self._agent_rank_opponents(pid, table)
+                    if agent_target is not None
+                    else self._agent_rank_opponents(pid, table)
+                )
                 targets = targets[:3]  # keep max 3
             else:
                 card = self._select_move(pid, table)
                 targets = self._rank_opponents(pid, table)
 
             for rank, target_id in enumerate(targets):
-                rows.append({
-                    "player_id": pid,
-                    "card": str(card),
-                    "priority": rank,
-                    "target_id": target_id,
-                })
+                rows.append(
+                    {
+                        "player_id": pid,
+                        "card": str(card),
+                        "priority": rank,
+                        "target_id": target_id,
+                    }
+                )
 
-
-        df = pd.DataFrame(rows, columns=["player_id", "card", "priority", "target_id"])
+        df = pd.DataFrame(
+            rows, columns=["player_id", "card", "priority", "target_id"]
+        )
+        try:
+            ChallengeSchema.validate(df)
+        except:
+            print("DF: ")
+            raise df
         return ChallengeSchema.validate(df)
-    
-    def resolve_challenges(self, table: PlayerDict, challenge_table: ChallengeTable) -> MatchupDict:
+
+    def resolve_challenges(
+        self, table: PlayerDict, challenge_table: ChallengeTable
+    ) -> MatchupDict:
         prefs: dict[PlayerID, list[PlayerID]] = (
-            challenge_table
-            .sort_values(["player_id", "priority"])   # priority col makes order guaranteed
+            challenge_table.sort_values(
+                ["player_id", "priority"]
+            )  # priority col makes order guaranteed
             .groupby("player_id", sort=False)["target_id"]
             .apply(list)
             .to_dict()
@@ -215,7 +248,7 @@ class RestrictedRPSEnv(gym.Env):
         matchups: MatchupDict = {}
 
         # first pass - match mutual top picks
-        #shuffled to avoid priority
+        # shuffled to avoid priority
         shuffled = all_ids.copy()
         random.shuffle(shuffled)
 
@@ -226,7 +259,10 @@ class RestrictedRPSEnv(gym.Env):
                 if candidate not in unmatched:
                     continue
                 if pid in prefs.get(candidate, []):
-                    matchups[(pid, candidate)] = (self._get_card(pid, challenge_table), self._get_card(candidate, challenge_table))
+                    matchups[(pid, candidate)] = (
+                        self._get_card(pid, challenge_table),
+                        self._get_card(candidate, challenge_table),
+                    )
                     unmatched -= {pid, candidate}
                     break
 
@@ -236,7 +272,10 @@ class RestrictedRPSEnv(gym.Env):
                 continue
             for candidate in prefs.get(pid, []):
                 if candidate in unmatched:
-                    matchups[(pid, candidate)] = (self._get_card(pid, challenge_table), self._get_card(candidate, challenge_table))
+                    matchups[(pid, candidate)] = (
+                        self._get_card(pid, challenge_table),
+                        self._get_card(candidate, challenge_table),
+                    )
                     unmatched -= {pid, candidate}
                     break
 
@@ -245,7 +284,10 @@ class RestrictedRPSEnv(gym.Env):
             opponents = [pid for pid in unmatched if pid != 0]
             if opponents:
                 opponent = random.choice(opponents)
-                matchups[(0, opponent)] = (self._get_card(0, challenge_table), self._get_card(opponent, challenge_table))
+                matchups[(0, opponent)] = (
+                    self._get_card(0, challenge_table),
+                    self._get_card(opponent, challenge_table),
+                )
                 unmatched -= {0, opponent}
 
         # fourth pass - random fallback
@@ -254,17 +296,22 @@ class RestrictedRPSEnv(gym.Env):
         while len(leftover) >= 2:
             a = leftover.pop()
             b = leftover.pop()
-            matchups[(a, b)] = (self._get_card(a, challenge_table), self._get_card(b, challenge_table))
+            matchups[(a, b)] = (
+                self._get_card(a, challenge_table),
+                self._get_card(b, challenge_table),
+            )
 
         return matchups
-    
-    def resolve_matchups(self, matchup_dict: MatchupDict, player_dict: PlayerDict):
+
+    def resolve_matchups(
+        self, matchup_dict: MatchupDict, player_dict: PlayerDict
+    ):
         for (pid1, pid2), (card1, card2) in matchup_dict.items():
             result = resolve(card1, card2)
-            if result == 1:    # pid1 wins
+            if result == 1:  # pid1 wins
                 player_dict[pid1]["stars_total"] += 1
                 player_dict[pid2]["stars_total"] -= 1
-            elif result == -1: # pid2 wins
+            elif result == -1:  # pid2 wins
                 player_dict[pid2]["stars_total"] += 1
                 player_dict[pid1]["stars_total"] -= 1
             # deduct cards regardless of outcome
@@ -292,10 +339,15 @@ class RestrictedRPSEnv(gym.Env):
             reward += self.reward_config.invalid_move
         else:
             # build challenge table
-            challenge_table = self.build_challenge_table(self.alive_dict, agent_card=card, agent_target=target_pid)
-            matchups = self.resolve_challenges(self.alive_dict, challenge_table)
+            challenge_table = self.build_challenge_table(
+                self.alive_dict, agent_card=card, agent_target=target_pid
+            )
 
-             # resolve matchups
+            matchups = self.resolve_challenges(
+                self.alive_dict, challenge_table
+            )
+            print()
+            # resolve matchups
             agent_stars_before = self.player_dict[0]["stars_total"]
             self.resolve_matchups(matchups, self.player_dict)
             agent_stars_after = self.player_dict[0]["stars_total"]
