@@ -1,7 +1,7 @@
 import gymnasium as gym
-from environment_core.rps_gym import RestrictedRPSEnv, Observation
-import environment_core.vis_rps as vis
-from environment_core.player import BasicPlayer
+from environment_core_dep.rps_gym import RestrictedRPSEnv, Observation
+import environment_core_dep.vis_rps as vis
+from environment_core_dep.player import BasicPlayer
 
 from tqdm import tqdm
 import pickle
@@ -124,7 +124,7 @@ def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
 Run training if train_flag is set; otherwise, run evaluation using saved Q-table.
 """
 
-num_episodes = 1_000_000
+num_episodes = 20000
 decay_rate = 0.999
 if train_flag:
     Q_table = Q_learning(

@@ -2,7 +2,9 @@ from dataclasses import dataclass
 from typing import TypedDict
 import gymnasium as gym
 from gymnasium import spaces
-
+from environment_core_dep.move import Card, Direction, chebyshev
+from environment_core_dep.player import Card, Player, AgentPlayer
+from environment_core_dep.matchup_table import MatchupTable
 
 class BudgetObs(TypedDict):
     rock: int
@@ -186,7 +188,7 @@ class RestrictedRPSEnv(gym.Env):
             op.position = self._random_position()
             op.stars = self.initial_stars
             op.budget = {Card.ROCK: self.initial_budget, Card.PAPER: self.initial_budget, Card.SCISSORS: self.initial_budget}
-        self.matchup_table = MatchupTable([*self._opponents, self._agent])
+        self.matchup_table = MatchupTable()
 
     def _alive_opponents(self) -> list[Player]:
         return [p for p in self._opponents if p.is_alive()]
