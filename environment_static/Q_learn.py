@@ -6,7 +6,7 @@ import pickle
 from gym_core.observation import Observation
 import gym_core.visualizer as vis
 
-env = RestrictedRPSEnv(n_opponents=6, stars=3)
+env = RestrictedRPSEnv(n_opponents=1, stars=3)
 train_flag = "train" in sys.argv
 gui_flag = "gui" in sys.argv
 if gui_flag:

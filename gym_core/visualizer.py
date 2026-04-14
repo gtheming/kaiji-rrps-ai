@@ -17,12 +17,22 @@ autoplay = False
 
 next_round = False
 
+_grid_rows = 0
+_grid_cols = 0
+_table_width = 1280  # width of the left (table) panel
 
-def init(width=1280, height=1000):
+
+def init(width=1280, height=1000, grid_rows=0, grid_cols=0):
     global screen, clock, control_menu, next_round_menu
+    global _grid_rows, _grid_cols, _table_width
+
+    _grid_rows = grid_rows
+    _grid_cols = grid_cols
+    _table_width = width
 
     pygame.init()
-    screen = pygame.display.set_mode((width, height), pygame.SHOWN)
+    grid_panel_width = grid_cols * 60 + 80 if grid_cols else 0  # CELL_SIZE=60, PADDING*2=80
+    screen = pygame.display.set_mode((width + grid_panel_width, height), pygame.SHOWN)
     pygame.display.set_caption("RPS Arena")
     clock = pygame.time.Clock()
 
@@ -265,6 +275,16 @@ def refresh(terminated: bool, truncated: bool, info: Info):
         screen.blit(
             font.render("players: skipped", True, (100, 110, 135)), (10, y)
         )
+
+    # ── grid panel ────────────────────────────────────────────────────
+    if _grid_rows > 0:
+        from environment_dynamic.grid_view import draw_to, BG_COLOR as GRID_BG
+        pygame.draw.rect(
+            screen, GRID_BG,
+            pygame.Rect(_table_width, 0, screen.get_width() - _table_width, screen.get_height())
+        )
+        pygame.draw.line(screen, (40, 48, 68), (_table_width, 0), (_table_width, screen.get_height()), 1)
+        draw_to(screen, _table_width, 0, info["alive_player_dict"], _grid_rows, _grid_cols)
 
     control_menu.draw(screen)
     next_round_menu.draw(screen)

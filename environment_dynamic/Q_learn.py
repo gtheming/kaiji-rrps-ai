@@ -1,16 +1,16 @@
-from environment_static.rrps_gym import RestrictedRPSEnv
+from environment_dynamic.rrps_gym import RestrictedRPSEnv
 from tqdm import tqdm
 import numpy as np
 import sys
 import pickle
 from gym_core.observation import Observation
 import gym_core.visualizer as vis
+env = RestrictedRPSEnv(n_opponents=1, stars=3)
 
-env = RestrictedRPSEnv(n_opponents=6, stars=3)
 train_flag = "train" in sys.argv
 gui_flag = "gui" in sys.argv
 if gui_flag:
-    vis.init()
+    vis.init(grid_rows=env.grid_size, grid_cols=env.grid_size)
 
 
 def obs_to_key(obs: Observation) -> tuple:

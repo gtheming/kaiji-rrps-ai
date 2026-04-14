@@ -65,6 +65,7 @@ class RestrictedRPSEnv(gym.Env):
             "rock_total": 3,
             "scissors_total": 3,
         },
+        grid_size: int = 6,
         max_turns: int = 500,
         reward_config: RewardConfig | None = None,
     ):
@@ -73,6 +74,7 @@ class RestrictedRPSEnv(gym.Env):
         self.initial_stars = stars
         self.initial_agent_budget = agent_budget
         self.initial_player_budget = player_budget
+        self.grid_size = grid_size
         self.max_turns = max_turns
         self.reward_config = reward_config or RewardConfig()
 
@@ -86,28 +88,38 @@ class RestrictedRPSEnv(gym.Env):
 
         self._action_to_card = {0: Card.rock, 1: Card.paper, 2: Card.scissors}
 
-        #
-        # self._action_to_direction = {
-        #     0: np.array([0, 1]),  # Move right (column + 1)
-        #     1: np.array([-1, 0]),  # Move up (row - 1)
-        #     2: np.array([0, -1]),  # Move left (column - 1)
-        #     3: np.array([1, 0]),  # Move down (row + 1)
-        # }
+        self._action_to_direction = {
+            0: np.array([0, 1]),  # Move right (column + 1)
+            1: np.array([-1, 0]),  # Move up (row - 1)
+            2: np.array([0, -1]),  # Move left (column - 1)
+            3: np.array([1, 0]),  # Move down (row + 1)
+        }
         self.player_dict: PlayerDict = {}
 
+    def _spread_positions(self):
+        """Distribute players evenly in a grid."""
+        rows = cols = self.grid_size
+        n = self.n_players
+        row_positions = np.linspace(
+            0, rows - 1, int(np.ceil(np.sqrt(n))), dtype=int
+        )
+        col_positions = np.linspace(
+            0, cols - 1, int(np.ceil(np.sqrt(n))), dtype=int
+        )
+        grid = np.array(np.meshgrid(row_positions, col_positions)).T.reshape(
+            -1, 2
+        )
+        return grid[:n]
+
     def _initialize_players(self):
+        positions = self._spread_positions()
         self.player_dict = {
-            0: {
-                **self.initial_agent_budget,
+            i: {
+                **(self.initial_agent_budget if i == 0 else self.initial_player_budget),
                 "stars_total": self.initial_stars,
-            },
-            **{
-                i: {
-                    **self.initial_player_budget,
-                    "stars_total": self.initial_stars,
-                }
-                for i in range(1, self.n_players)
-            },
+                "position": positions[i],
+            }
+            for i in range(self.n_players)
         }
         self.still_playing_dict = self.player_dict.copy()
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TypedDict
 from typing import TypeAlias
-
+import numpy as np
 
 class Budget(TypedDict):
     rock_total: int
@@ -11,7 +11,7 @@ class Budget(TypedDict):
 
 class Player(Budget):
     stars_total: int
-    position: tuple | None
+    position: np.ndarray
 
 
 PlayerID: TypeAlias = int
