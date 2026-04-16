@@ -1,6 +1,6 @@
 import gymnasium as gym
-from environment_core.rps_gym import RestrictedRPSEnv, Observation
-import environment_core.vis_rps as vis
+from environment_tabular_nav.rps_gym import RestrictedRPSEnv, Observation
+import environment_tabular_nav.vis_rps as vis
 from tqdm import tqdm
 import pickle
 import numpy as np
