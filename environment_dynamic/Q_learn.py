@@ -1,184 +1,115 @@
-from environment_dynamic.rrps_gym import RestrictedRPSEnv
-from tqdm import tqdm
-import numpy as np
 import sys
-import pickle
-from gym_core.observation import Observation
-import gym_core.visualizer as vis
-env = RestrictedRPSEnv(n_opponents=1, stars=3)
+from pathlib import Path
+import pandas as pd
+from tqdm import tqdm
+from stable_baselines3 import DQN
+from stable_baselines3.common.callbacks import ProgressBarCallback
 
-train_flag = "train" in sys.argv
-gui_flag = "gui" in sys.argv
-if gui_flag:
+from environment_dynamic.rrps_gym import RestrictedRPSEnv
+import gym_core.visualizer as vis
+import argparse
+
+# Fixed obs cap — agent sees at most 4 nearest opponents within view_radius.
+# Keeps obs shape (30,) constant so a trained model works across any n_opponents.
+N_OBS_OPPONENTS = 4
+
+env = RestrictedRPSEnv(
+    n_opponents=10, stars=3, n_obs_opponents=N_OBS_OPPONENTS, grid_size=14
+)
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--file")
+parser.add_argument("--train", action="store_true")
+parser.add_argument("--gui", action="store_true")
+args = parser.parse_args()
+MODEL_PATH = args.file
+
+train_flag = args.train
+gui_flag = args.gui
+if gui_flag and not train_flag:
     vis.init(grid_rows=env.grid_size, grid_cols=env.grid_size)
 
+# ── Training ───────────────────────────────────────────────────────────────────
+num_episodes = 2_000_000
+gamma = 0.9
 
-def obs_to_key(obs: Observation) -> tuple:
-    agent = obs["player_dict"][0]
-    opponents = sorted(
-        ((pid, p) for pid, p in obs["player_dict"].items() if pid != 0),
-        key=lambda x: x[0],
-    )
-    opponent_state = tuple(
-        (
-            p["stars_total"] > 0,
-            p["rock_total"] > 0,
-            p["paper_total"] > 0,
-            p["scissors_total"] > 0,
-        )
-        for _, p in opponents
-    )
-
-    return (
-        agent["stars_total"],
-        agent["rock_total"],
-        agent["paper_total"],
-        agent["scissors_total"],
-        opponent_state,
-    )
-
-
-def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
-    """
-    Run Q-learning algorithm for a specified number of episodes.
-
-    Parameters:
-    - num_episodes (int): Number of episodes to run.
-    - gamma (float): Discount factor.
-    - epsilon (float): Exploration rate.
-    - decay_rate (float): Rate at which epsilon decays. Epsilon should be decayed as epsilon = epsilon * decay_rate after each episode.
-
-    Returns:
-    - Q_table (dict): Dictionary containing the Q-values for each state-action pair.
-    """
-    Q_table = {}
-    Q_update_counts = {}
-
-    for _ in tqdm(range(num_episodes)):
-        start_obs, _ = env.reset()
-        prev_state_key = obs_to_key(start_obs)
-        if prev_state_key not in Q_update_counts:
-            Q_update_counts[prev_state_key] = np.zeros(env.action_space.n)
-        if prev_state_key not in Q_table:
-            Q_table[prev_state_key] = np.zeros(env.action_space.n)
-        while True:
-            # initialize prev state keys if not already
-            action = None
-
-            # want random action w/ prob P = epsilon
-            if np.random.random() <= epsilon:
-                action = env.action_space.sample()
-            else:
-                action = np.argmax(Q_table[prev_state_key])
-
-            # transition to state s'
-            new_obs, reward, terminated, truncated, info = env.step(action)
-            new_state_key = obs_to_key(new_obs)
-            ## initalize state action if not already
-            if new_state_key not in Q_update_counts:
-                Q_update_counts[new_state_key] = np.zeros(env.action_space.n)
-            if new_state_key not in Q_table:
-                Q_table[new_state_key] = np.zeros(env.action_space.n)
-
-            # calculate Q vals
-            Q_old_update_counts = Q_update_counts[prev_state_key][action]
-            Q_old = Q_table[prev_state_key][action]
-            V_opt_old = np.max(Q_table[new_state_key])
-            eta = 1 / (1 + Q_old_update_counts)
-            Q_new = (1 - eta) * Q_old + eta * (reward + gamma * V_opt_old)
-
-            # update table
-            Q_table[prev_state_key][action] = Q_new
-            Q_update_counts[prev_state_key][action] += 1
-
-            if gui_flag:
-                vis.refresh(terminated, truncated, info)
-            # update epsilon and end or continue w/ new step as prev
-            if terminated:
-                epsilon *= decay_rate
-                break
-            else:
-                prev_state_key = new_state_key
-    return Q_table
-
-
-"""
-Run training if train_flag is set; otherwise, run evaluation using saved Q-table.
-"""
-
-num_episodes = 20_000
-decay_rate = 0.999
 if train_flag:
-    Q_table = Q_learning(
-        num_episodes=num_episodes,
-        gamma=0.9,
-        epsilon=1,
-        decay_rate=decay_rate,
-    )  # Run Q-learning
+    model = DQN(
+        "MlpPolicy",
+        env,
+        verbose=1,
+        learning_rate=1e-4,
+        buffer_size=100_000,
+        learning_starts=2_000,
+        batch_size=64,
+        gamma=gamma,
+        target_update_interval=500,
+        exploration_fraction=0.5,
+        exploration_final_eps=0.05,
+        policy_kwargs=dict(net_arch=[128, 128]),
+    )
+    model.learn(total_timesteps=num_episodes, callback=ProgressBarCallback())
+    model.save(MODEL_PATH)
+    print(f"Saved to {MODEL_PATH}.zip")
 
-    # Save the Q-table dict to a file
-    with open(
-        "Q_table_" + str(num_episodes) + "_" + str(decay_rate) + ".pickle",
-        "wb",
-    ) as handle:
-        pickle.dump(Q_table, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    print(f"Completed", num_episodes, decay_rate)
-
-
-def softmax(x, temp=1.0):
-    e_x = np.exp((x - np.max(x)) / temp)
-    return e_x / e_x.sum(axis=0)
-
+# ── Evaluation ─────────────────────────────────────────────────────────────────
 
 if not train_flag:
+    model = DQN.load(MODEL_PATH, env=env)
+    print(f"Loaded {MODEL_PATH}.zip")
 
     rewards = []
     wins = 0
     losses = 0
     truncations = 0
+    rows = []
+    n_eval_episodes = 10_000
 
-    filename = (
-        "Q_table_" + str(num_episodes) + "_" + str(decay_rate) + ".pickle"
-    )
-    with open(filename, "rb") as f:
-        Q_table = pickle.load(f)
-    print(
-        f"Q_table: {len(Q_table)} states, {next(iter(Q_table.values())).shape}"
-        " actions per state"
-    )
-    for episode in tqdm(range(10000)):
-        obs, info = env.reset()
-        total_reward = 0
+    for episode in tqdm(range(n_eval_episodes)):
+        obs, _ = env.reset()
+        total_reward = 0.0
         terminated = False
+
         while not terminated:
-            state = obs_to_key(obs)
-
-            try:
-                action = np.random.choice(
-                    env.action_space.n, p=softmax(Q_table[state])
-                )  # Select action using softmax over Q-values
-            except KeyError:
-                action = (
-                    env.action_space.sample()
-                )  # Fallback to random action if state not in Q-table
-
-            obs, reward, terminated, truncated, info = env.step(action)
+            action, _ = model.predict(obs, deterministic=True)
+            obs, reward, terminated, truncated, info = env.step(int(action))
+            total_reward += reward
             if gui_flag:
                 vis.refresh(terminated, truncated, info)
-            total_reward += reward
 
-        if info["game_status"] == "victory":
+        status = info["game_status"]
+        agent = info["alive_player_dict"][0]
+        rows.append(
+            {
+                "episode": episode,
+                "game_status": status,
+                "total_reward": total_reward,
+                "turns": info["round_number"],
+                "agent_stars": agent["stars_total"],
+                "agent_cards_left": (
+                    agent["rock_total"]
+                    + agent["paper_total"]
+                    + agent["scissors_total"]
+                ),
+                "opponents_alive": len(info["alive_player_dict"]) - 1,
+            }
+        )
+
+        rewards.append(total_reward)
+        if status == "victory":
             wins += 1
-        elif info["game_status"] == "eliminated":
+        elif status == "eliminated":
             losses += 1
         else:
             truncations += 1
 
-        # print("Total reward:", total_reward)
-        rewards.append(total_reward)
-    avg_reward = sum(rewards) / len(rewards)
+    out_path = Path("analysis") / f"dynamic_results_{n_eval_episodes}.csv"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(out_path, index=False)
+    print(f"Saved {out_path}")
+
     total = len(rewards)
-    print(f"avg_reward: {avg_reward:.2f}")
+    print(f"avg_reward: {sum(rewards)/total:.2f}")
     print(f"win rate:   {wins/total*100:.1f}%  ({wins}/{total})")
     print(f"loss rate:  {losses/total*100:.1f}%  ({losses}/{total})")
     print(f"truncated:  {truncations/total*100:.1f}%  ({truncations}/{total})")

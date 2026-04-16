@@ -149,9 +149,9 @@ class RestrictedRPSEnv(gym.Env):
                 "stars": spaces.Discrete(max_stars + 1),
                 "budget": spaces.Dict(
                     {
-                        "rock": spaces.Discrete(max_budget + 1),
-                        "paper": spaces.Discrete(max_budget + 1),
-                        "scissors": spaces.Discrete(max_budget + 1),
+                        "rock": spaces.Discrete(2),
+                        "paper": spaces.Discrete(2),
+                        "scissors": spaces.Discrete(2),
                     }
                 ),
                 "position": spaces.Tuple(
@@ -208,9 +208,9 @@ class RestrictedRPSEnv(gym.Env):
             "player_id": p.id,
             "stars": p.stars,
             "budget": {
-                "rock": p.budget[Card.ROCK],
-                "paper": p.budget[Card.PAPER],
-                "scissors": p.budget[Card.SCISSORS],
+                "rock": int(p.budget[Card.ROCK] > 0),
+                "paper": int(p.budget[Card.PAPER] > 0),
+                "scissors": int(p.budget[Card.SCISSORS] > 0),
             },
             "position": p.position,
         }

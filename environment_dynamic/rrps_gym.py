@@ -15,14 +15,12 @@ from gym_core.player import PlayerDict, PlayerID, Budget, Player
 class RewardConfig:
     win_matchup: float = 100
     lose_matchup: float = -100
-    tie_matchup: float = 10
-    eliminated: float = -500
+    tie_matchup: float = 0
+    eliminated: float = -2000
     victory: float = 2000
     invalid_move: float = -10
-    within_challenge_range: float = 1
-    approach_opponent: float = 0.5
-    has_cards_at_end: float = -200
-    has_sub_3_stars_at_end: float = -300
+    within_challenge_range: float = 0
+    approach_opponent: float = 0
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────────────
@@ -70,7 +68,9 @@ class RestrictedRPSEnv(gym.Env):
         self.n_opponents = n_opponents
         # How many nearest opponents to include in the observation.
         # Defaults to all opponents; set lower to cap obs size when scaling.
-        self.n_obs_opponents = n_obs_opponents if n_obs_opponents is not None else n_opponents
+        self.n_obs_opponents = (
+            n_obs_opponents if n_obs_opponents is not None else n_opponents
+        )
         self.view_radius = view_radius
         self.initial_stars = stars
         self.initial_agent_budget = agent_budget
@@ -87,9 +87,19 @@ class RestrictedRPSEnv(gym.Env):
             max(agent_budget.values()), max(player_budget.values())
         )
         n_features = 7 + 6 * self.n_obs_opponents
+
         high = np.array(
-            [grid_size - 1, grid_size - 1, max_cards, max_cards, max_cards, 20.0, 1.0]
-            + [1.0, grid_size - 1, grid_size - 1, 1.0, 1.0, 1.0] * self.n_obs_opponents,
+            [
+                grid_size - 1,
+                grid_size - 1,
+                max_cards,
+                max_cards,
+                max_cards,
+                20.0,
+                1.0,
+            ]
+            + [1.0, grid_size - 1, grid_size - 1, 1.0, 1.0, 1.0]
+            * self.n_obs_opponents,
             dtype=np.float32,
         )
         self.observation_space = spaces.Box(
@@ -130,7 +140,11 @@ class RestrictedRPSEnv(gym.Env):
         positions = self._spread_positions()
         self.player_dict = {
             i: {
-                **(self.initial_agent_budget if i == 0 else self.initial_player_budget),
+                **(
+                    self.initial_agent_budget
+                    if i == 0
+                    else self.initial_player_budget
+                ),
                 "stars_total": self.initial_stars,
                 "position": positions[i],
             }
@@ -139,6 +153,7 @@ class RestrictedRPSEnv(gym.Env):
         self.still_playing_dict = self.player_dict.copy()
 
     def _get_obs(self) -> np.ndarray:
+        """"""
         agent = self.player_dict[0]
         agent_pos = agent["position"]
         obs = [
@@ -151,13 +166,17 @@ class RestrictedRPSEnv(gym.Env):
             float(self.turn) / self.max_turns,
         ]
 
-        # Opponents within view_radius (Manhattan), sorted nearest-first
         alive_opps = sorted(
             (
                 (pid, self.player_dict[pid])
                 for pid in self.still_playing_dict
                 if pid != 0
-                and int(np.sum(np.abs(self.player_dict[pid]["position"] - agent_pos))) <= self.view_radius
+                and int(
+                    np.sum(
+                        np.abs(self.player_dict[pid]["position"] - agent_pos)
+                    )
+                )
+                <= self.view_radius
             ),
             key=lambda x: int(np.sum(np.abs(x[1]["position"] - agent_pos))),
         )
@@ -168,13 +187,12 @@ class RestrictedRPSEnv(gym.Env):
                     1.0,
                     float(p["position"][0]),
                     float(p["position"][1]),
-                    float(p["rock_total"] > 0),
-                    float(p["paper_total"] > 0),
-                    float(p["scissors_total"] > 0),
-                    
+                    float(p["rock_total"]),
+                    float(p["paper_total"]),
+                    float(p["scissors_total"]),
                 ]
             else:
-                obs += [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # padding for dead/absent opponents
+                obs += [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
         return np.array(obs, dtype=np.float32)
 
@@ -219,7 +237,9 @@ class RestrictedRPSEnv(gym.Env):
             )
             if is_playing:
                 new_playing_dict[pid] = player
-        new_playing_dict[0] = self.player_dict[0]  # agent death handled at step end
+        new_playing_dict[0] = self.player_dict[
+            0
+        ]  # agent death handled at step end
         self.still_playing_dict = new_playing_dict
 
     def _select_move(self, pid: PlayerID, table: PlayerDict) -> Card:
@@ -335,7 +355,9 @@ class RestrictedRPSEnv(gym.Env):
 
         # Proximity reward: agent shares a cell with a live opponent
         if any(
-            np.array_equal(agent["position"], self.player_dict[pid]["position"])
+            np.array_equal(
+                agent["position"], self.player_dict[pid]["position"]
+            )
             for pid in alive_pids
             if pid != 0
         ):
@@ -367,7 +389,9 @@ class RestrictedRPSEnv(gym.Env):
             reward += self.reward_config.victory
 
         obs = self._get_obs()
-        info = self._get_info(initial_alive_player_dict, game_status, None, matchup_dict)
+        info = self._get_info(
+            initial_alive_player_dict, game_status, None, matchup_dict
+        )
         self.turn += 1
         return obs, reward, terminated, truncated, info
 

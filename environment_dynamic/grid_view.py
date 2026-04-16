@@ -5,18 +5,18 @@ from gym_core.cards import Card
 
 _surface = None
 _clock = None
-_match_log = []  # list of (turn, opp_id, agent_card, opp_card, result)
+_match_log = [] 
 _star_img = None
 _star_loaded = False
 MAX_LOG = 10
 
-# Game-level win/loss counters (same basis as Q_learn eval)
+# game win/loss counters
 _game_wins = 0
 _game_losses = 0
 _game_total = 0
 
 _STAR_PATH = Path(__file__).parent / "assets" / "star.png"
-STAR_SIZE = 22  # pixel size in the info panel
+STAR_SIZE = 22 
 
 CELL_SIZE = 60
 PADDING = 40
@@ -100,14 +100,14 @@ def draw_to(surface, x_off, y_off, alive_player_dict, grid_rows, grid_cols):
     small = pygame.font.SysFont("monospace", 13)
     stars_font = pygame.font.SysFont("monospace", 26)
 
-    # Build pos_map — agent (pid=0) wins on shared cells
+    # map 
     pos_map = {}
     for pid, p in alive_player_dict.items():
         key = (int(p["position"][0]), int(p["position"][1]))
         if key not in pos_map or pid == 0:
             pos_map[key] = (pid, p)
 
-    # ── Grid ──────────────────────────────────────────────────────────────────
+    # draw grid
     for r in range(grid_rows):
         for c in range(grid_cols):
             x = x_off + PADDING + c * CELL_SIZE
@@ -126,11 +126,11 @@ def draw_to(surface, x_off, y_off, alive_player_dict, grid_rows, grid_cols):
                 pygame.draw.rect(surface, BG_COLOR, rect)
                 pygame.draw.rect(surface, GRID_COLOR, rect, 1)
 
-    # ── Info panel below grid ─────────────────────────────────────────────────
+    # panel below grid
     panel_x = x_off + PADDING
     panel_y = y_off + PADDING + grid_rows * CELL_SIZE + 12
 
-    # Agent stars + win/loss rate
+    # agent stars + win/loss rate
     agent = alive_player_dict.get(0)
     if agent is not None:
         wr = f"{_game_wins/_game_total*100:.0f}%"   if _game_total else "—"
@@ -162,7 +162,7 @@ def draw_to(surface, x_off, y_off, alive_player_dict, grid_rows, grid_cols):
 
         panel_y += row_h + 10
 
-    # Match log
+    # agent match log
     if _match_log:
         hdr = small.render("Recent matches:", True, DIM_COLOR)
         surface.blit(hdr, (panel_x, panel_y))
@@ -179,7 +179,7 @@ def draw_to(surface, x_off, y_off, alive_player_dict, grid_rows, grid_cols):
 
 
 def render(alive_player_dict, grid_rows, grid_cols):
-    """Standalone render — only used when grid_view owns its own window."""
+    """only used when grid_view owns its own window."""
     if _surface is None:
         return
     pygame.event.pump()

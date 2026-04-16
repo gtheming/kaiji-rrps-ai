@@ -16,10 +16,30 @@ cell_menu = None
 autoplay = False
 
 next_round = False
+_last_frame = None
 
 _grid_rows = 0
 _grid_cols = 0
 _table_width = 1280  # width of the left (table) panel
+
+
+def _rebuild_menus():
+    global control_menu, next_round_menu
+    w = _table_width
+    theme = pygame_menu.Theme(
+        background_color=(20, 24, 34),
+        title=False,
+        widget_font=pygame_menu.font.FONT_8BIT,
+        widget_font_size=12,
+        widget_font_color=(220, 225, 235),
+        widget_background_color=(30, 36, 52),
+        widget_border_width=1,
+        widget_border_color=(40, 48, 68),
+    )
+    control_menu = pygame_menu.Menu("", 200, 60, position=(w - 200, 0, False), theme=theme)
+    control_menu.add.button(f"autoplay: {'ON' if autoplay else 'OFF'}", _toggle_autoplay_btn)
+    next_round_menu = pygame_menu.Menu("", 200, 60, position=(w - 200, 60, False), theme=theme)
+    next_round_menu.add.button("Next Round", _on_next_round)
 
 
 def init(width=1280, height=1000, grid_rows=0, grid_cols=0):
@@ -32,40 +52,13 @@ def init(width=1280, height=1000, grid_rows=0, grid_cols=0):
 
     pygame.init()
     grid_panel_width = grid_cols * 60 + 80 if grid_cols else 0  # CELL_SIZE=60, PADDING*2=80
-    screen = pygame.display.set_mode((width + grid_panel_width, height), pygame.SHOWN)
+    screen = pygame.display.set_mode(
+        (width + grid_panel_width, height), pygame.SHOWN | pygame.RESIZABLE
+    )
     pygame.display.set_caption("RPS Arena")
     clock = pygame.time.Clock()
 
-    control_theme = pygame_menu.Theme(
-        background_color=(20, 24, 34),
-        title=False,
-        widget_font=pygame_menu.font.FONT_8BIT,
-        widget_font_size=12,
-        widget_font_color=(220, 225, 235),
-        widget_background_color=(30, 36, 52),
-        widget_border_width=1,
-        widget_border_color=(40, 48, 68),
-    )
-
-    control_menu = pygame_menu.Menu(
-        "",
-        200,
-        60,
-        position=(width - 200, 0, False),
-        theme=control_theme,
-    )
-    control_menu.add.button(
-        f"autoplay: {'ON' if autoplay else 'OFF'}", _toggle_autoplay_btn
-    )
-
-    next_round_menu = pygame_menu.Menu(
-        "",
-        200,
-        60,
-        position=(width - 200, 60, False),
-        theme=control_theme,
-    )
-    next_round_menu.add.button("Next Round", _on_next_round)
+    _rebuild_menus()
 
 
 def _on_next_round():
@@ -121,7 +114,7 @@ def render_table(
 
     num_cols = len(rows[0]) if rows else 0
     if col_widths is None:
-        col_w = screen.get_width() // num_cols
+        col_w = _table_width // num_cols
         col_widths = [col_w] * num_cols
 
     if font is None:
@@ -162,6 +155,7 @@ def render_table(
 
 
 def handle_events(events):
+    global _table_width
     for event in events:
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -169,6 +163,14 @@ def handle_events(events):
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             pygame.quit()
             sys.exit()
+        if event.type == pygame.VIDEORESIZE:
+            # Keep table panel proportional; grid panel takes the remainder
+            if _grid_cols:
+                grid_panel_width = _grid_cols * 60 + 80
+                _table_width = max(200, event.w - grid_panel_width)
+            else:
+                _table_width = event.w
+            _rebuild_menus()
 
 
 def wait_for_click():
@@ -177,6 +179,11 @@ def wait_for_click():
 
     def _draw_menus(events):
         handle_events(events)
+        if _last_frame is not None:
+            if _last_frame.get_size() == screen.get_size():
+                screen.blit(_last_frame, (0, 0))
+            else:
+                screen.blit(pygame.transform.scale(_last_frame, screen.get_size()), (0, 0))
         control_menu.update(events)
         control_menu.draw(screen)
         next_round_menu.update(events)
@@ -205,6 +212,7 @@ def toggle_autoplay():
 
 
 def refresh(terminated: bool, truncated: bool, info: Info):
+    global _last_frame
     if _grid_rows > 0:
         from environment_dynamic.grid_view import update_match_log
         update_match_log(terminated, info)
@@ -271,10 +279,10 @@ def refresh(terminated: bool, truncated: bool, info: Info):
     y += 28
     alive_player_dict = info["alive_player_dict"]
     if alive_player_dict:
-        alive_player_dict = pd.DataFrame(alive_player_dict).T
-        alive_player_dict.index.name = "player_id"
-        alive_player_dict = player_df.reset_index()
-        render_table(screen, player_df, y=y)
+        alive_df = pd.DataFrame(alive_player_dict).T
+        alive_df.index.name = "player_id"
+        alive_df = alive_df.reset_index()
+        render_table(screen, alive_df, y=y)
     else:
         screen.blit(
             font.render("players: skipped", True, (100, 110, 135)), (10, y)
@@ -290,6 +298,7 @@ def refresh(terminated: bool, truncated: bool, info: Info):
         pygame.draw.line(screen, (40, 48, 68), (_table_width, 0), (_table_width, screen.get_height()), 1)
         draw_to(screen, _table_width, 0, info["alive_player_dict"], _grid_rows, _grid_cols)
 
+    _last_frame = screen.copy()
     control_menu.draw(screen)
     next_round_menu.draw(screen)
     pygame.display.flip()
