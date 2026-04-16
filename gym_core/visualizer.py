@@ -214,7 +214,7 @@ def toggle_autoplay():
 def refresh(terminated: bool, truncated: bool, info: Info):
     global _last_frame
     if _grid_rows > 0:
-        from environment_dynamic.grid_view import update_match_log
+        from environment_dqn_nav.grid_view import update_match_log
         update_match_log(terminated, info)
 
     screen.fill((15, 15, 20))
@@ -290,7 +290,7 @@ def refresh(terminated: bool, truncated: bool, info: Info):
 
     # ── grid panel ────────────────────────────────────────────────────
     if _grid_rows > 0:
-        from environment_dynamic.grid_view import draw_to, BG_COLOR as GRID_BG
+        from environment_dqn_nav.grid_view import draw_to, BG_COLOR as GRID_BG
         pygame.draw.rect(
             screen, GRID_BG,
             pygame.Rect(_table_width, 0, screen.get_width() - _table_width, screen.get_height())
