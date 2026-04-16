@@ -92,11 +92,12 @@ class RRPSQLearnCore:
                 Q_update_counts[prev_state_key][action] += 1
 
                 if gui:
-                    self.render_gui(info)
+                    self.render_gui(terminated, truncated, info)
                 # update epsilon and end or continue w/ new step as prev
 
                 if terminated:
                     epsilon *= decay_rate
+                    break
                 else:
                     prev_state_key = new_state_key
         with open(
@@ -111,7 +112,7 @@ class RRPSQLearnCore:
         return self
 
     @classmethod
-    def render_gui(cls, info: dict[str, Any]):
+    def render_gui(cls, terminated, truncated, info: dict[str, Any]):
         """optional, render visualisation of training"""
         ...
 

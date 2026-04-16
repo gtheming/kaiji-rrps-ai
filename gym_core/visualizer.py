@@ -42,6 +42,10 @@ def _rebuild_menus():
     next_round_menu.add.button("Next Round", _on_next_round)
 
 
+def is_initialized():
+    return pygame.display.get_init()
+
+
 def init(width=1280, height=1000, grid_rows=0, grid_cols=0):
     global screen, clock, control_menu, next_round_menu
     global _grid_rows, _grid_cols, _table_width

@@ -31,4 +31,6 @@ class QLearnStatic(RRPSQLearnCore):
         )
 
     def render_gui(self, terminated, truncated, info):
+        if not vis.is_initialized():
+            vis.init()
         vis.refresh(terminated, truncated, info)
