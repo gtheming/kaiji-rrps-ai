@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from abc import ABC, abstractmethod, classmethod
+from abc import ABC, abstractmethod
 from gym_core.info import Info
 import gymnasium as gym
 from gym_core.rrps_gym import RRPSEnvCore
@@ -9,8 +9,7 @@ from tqdm import tqdm
 import pickle
 
 
-class QLearnAgentCore:
-
+class RRPSQLearnCore:
     def __init__(self, env: RRPSEnvCore, agent_name: str) -> None:
         if not isinstance(env, RRPSEnvCore):
             raise TypeError(
@@ -22,7 +21,7 @@ class QLearnAgentCore:
         self.Q_table: Dict[Any, Any] | None = None
 
     @abstractmethod
-    def hash(self) -> np.ndarray:
+    def hash(self, obs) -> np.ndarray:
         """function used to convert the observation to a"""
         ...
 
@@ -31,7 +30,6 @@ class QLearnAgentCore:
         e_x = np.exp((x - np.max(x)) / temp)
         return e_x / e_x.sum(axis=0)
 
-    @classmethod
     def agent_move(self, obs):
         if self.Q_table is None:
             raise "No agent Loaded"
@@ -39,12 +37,12 @@ class QLearnAgentCore:
         Q_val = self.Q_table[state]
         return self.softmax(Q_val)
 
-    @classmethod
     def tabular_train(
         self,
         train_episodes: int,
         gamma: float,
         decay_rate: float,
+        epsilon: float = 1,
         gui: bool = False,
     ):
         Q_table = {}
@@ -94,7 +92,7 @@ class QLearnAgentCore:
                 Q_update_counts[prev_state_key][action] += 1
 
                 if gui:
-                    self.render_gui(terminated, truncated, info)
+                    self.render_gui(info)
                 # update epsilon and end or continue w/ new step as prev
 
                 if terminated:
@@ -110,13 +108,13 @@ class QLearnAgentCore:
             "wb",
         ) as handle:
             pickle.dump(Q_table, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        return self
 
     @classmethod
-    def render_gui(cls):
+    def render_gui(cls, info: dict[str, Any]):
         """optional, render visualisation of training"""
         ...
 
-    @classmethod
     def play_agent(self, num_episodes: int, gui: bool = False):
         obs, info = self.env.reset()
         total_reward = 0
@@ -133,6 +131,9 @@ class QLearnAgentCore:
 
             obs, reward, terminated, truncated, info = self.env.step(action)
 
+            yield obs, reward, terminated, truncated, info
+
             if gui:
                 self.render_gui(terminated, truncated, info)
             total_reward += reward
+        return self

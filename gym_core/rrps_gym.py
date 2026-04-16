@@ -1,12 +1,12 @@
 from typing import Generic, TypeVar
-from abc import ABC, abstractmethod, classmethod
+from abc import ABC, abstractmethod
 from gym_core.info import Info
 import gymnasium as gym
 
 ObsType = TypeVar("ObsType")
 
 
-class RRPSEnvCore(gym.Env, ABC, Generic[ObsType], agent_name: str):
+class RRPSEnvCore(gym.Env, ABC, Generic[ObsType]):
 
     @abstractmethod
     def _get_obs(self):

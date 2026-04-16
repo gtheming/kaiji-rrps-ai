@@ -50,7 +50,7 @@ def resolve(m1: Card, m2: Card) -> int:
 # ── environment ───────────────────────────────────────────────────────────────────
 
 
-class RestrictedRPSEnv(RRPSEnvCore):
+class StaticRRPSEnv(RRPSEnvCore):
     def __init__(
         self,
         n_opponents: int = 6,
