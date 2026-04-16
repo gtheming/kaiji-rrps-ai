@@ -2,9 +2,9 @@ from dataclasses import dataclass
 from typing import TypedDict
 import gymnasium as gym
 from gymnasium import spaces
-from environment_core_dep.move import Card, Direction, chebyshev
-from environment_core_dep.player import Card, Player, AgentPlayer
-from environment_core_dep.matchup_table import MatchupTable
+from environment_tabular_nav.move import Card, Direction, chebyshev
+from environment_tabular_nav.player import Card, Player, AgentPlayer
+from environment_tabular_nav.matchup_table import MatchupTable
 
 class BudgetObs(TypedDict):
     rock: int

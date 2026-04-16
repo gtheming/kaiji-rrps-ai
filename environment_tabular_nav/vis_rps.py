@@ -4,9 +4,9 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pygame
 import time
-from environment_core_dep.rps_gym import RestrictedRPSEnv
-from environment_core_dep.move import Card
-from environment_core_dep.player import BasicPlayer
+from environment_tabular_nav.rps_gym import RestrictedRPSEnv
+from environment_tabular_nav.move import Card
+from environment_tabular_nav.player import BasicPlayer
 
 CELL_SIZE = 40
 CONSOLE_WIDTH = 350

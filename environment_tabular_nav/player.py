@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 import numpy
 
-from environment_core_dep.move import Card, Direction, chebyshev
+from environment_tabular_nav.move import Card, Direction, chebyshev
 
 
 class PlayerType(Enum):

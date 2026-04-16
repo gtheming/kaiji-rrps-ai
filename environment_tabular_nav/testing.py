@@ -1,7 +1,7 @@
 import gymnasium as gym
-from environment_core_dep.rps_gym import RestrictedRPSEnv, Observation
-import environment_core_dep.vis_rps as vis
-from environment_core_dep.player import BasicPlayer
+from environment_tabular_nav.rps_gym import RestrictedRPSEnv, Observation
+import environment_tabular_nav.vis_rps as vis
+from environment_tabular_nav.player import BasicPlayer
 
 from tqdm import tqdm
 import pickle
