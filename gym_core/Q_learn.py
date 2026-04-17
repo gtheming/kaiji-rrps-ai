@@ -114,7 +114,7 @@ class RRPSQLearnCore(Generic[ObsType]):
                 else:
                     prev_state_key = new_state_key
         name = agent_name or self.agent_name
-        with open(self._file_name(name), "wb") as handle:
+        with open(self._file_name(name, train_episodes, decay_rate), "wb") as handle:
             pickle.dump(Q_table, handle, protocol=pickle.HIGHEST_PROTOCOL)
         self.Q_table = Q_table
         self.agent_name = name

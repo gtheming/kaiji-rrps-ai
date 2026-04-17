@@ -7,16 +7,16 @@ class QLearnStatic(RRPSQLearnCore[Observation]):
 
     def hash(self, obs):
         agent = obs["player_dict"][0]
+        initial = self.env.initial_player_budget
         opponents = sorted(
             ((pid, p) for pid, p in obs["player_dict"].items() if pid != 0),
             key=lambda x: x[0],
         )
         opponent_state = tuple(
             (
-                p["stars_total"] > 0,
-                p["rock_total"] > 0,
-                p["paper_total"] > 0,
-                p["scissors_total"] > 0,
+                initial["rock_total"] - p["rock_total"],
+                initial["paper_total"] - p["paper_total"],
+                initial["scissors_total"] - p["scissors_total"],
             )
             for _, p in opponents
         )
