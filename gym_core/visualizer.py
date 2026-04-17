@@ -42,6 +42,10 @@ def _rebuild_menus():
     next_round_menu.add.button("Next Round", _on_next_round)
 
 
+def is_initialized():
+    return pygame.display.get_init()
+
+
 def init(width=1280, height=1000, grid_rows=0, grid_cols=0):
     global screen, clock, control_menu, next_round_menu
     global _grid_rows, _grid_cols, _table_width
@@ -214,7 +218,7 @@ def toggle_autoplay():
 def refresh(terminated: bool, truncated: bool, info: Info):
     global _last_frame
     if _grid_rows > 0:
-        from environment_dynamic.grid_view import update_match_log
+        from environment_dqn_nav.grid_view import update_match_log
         update_match_log(terminated, info)
 
     screen.fill((15, 15, 20))
@@ -290,7 +294,7 @@ def refresh(terminated: bool, truncated: bool, info: Info):
 
     # ── grid panel ────────────────────────────────────────────────────
     if _grid_rows > 0:
-        from environment_dynamic.grid_view import draw_to, BG_COLOR as GRID_BG
+        from environment_dqn_nav.grid_view import draw_to, BG_COLOR as GRID_BG
         pygame.draw.rect(
             screen, GRID_BG,
             pygame.Rect(_table_width, 0, screen.get_width() - _table_width, screen.get_height())

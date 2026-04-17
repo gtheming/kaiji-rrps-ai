@@ -1,22 +1,12 @@
 import gymnasium as gym
-from environment_core_dep.rps_gym import RestrictedRPSEnv, Observation
-import environment_core_dep.vis_rps as vis
-from environment_core_dep.player import BasicPlayer
-
+from environment_tabular_nav.rps_gym import RestrictedRPSEnv, Observation
+import environment_tabular_nav.vis_rps as vis
 from tqdm import tqdm
 import pickle
 import numpy as np
 import sys
 
-opponents = [
-    BasicPlayer(
-        player_id=i + 1,
-        stars=3,
-        budget=4,
-    )
-    for i in range(30)
-]
-env = RestrictedRPSEnv(opponents=opponents, stars=3, budget=4, grid_size=12)
+env = RestrictedRPSEnv(n_opponents=10, stars=3, budget=4, grid_size=12)
 
 BOLD = "\033[1m"  # ANSI escape sequence for bold text
 RESET = "\033[0m"  # ANSI escape sequence to reset text formatting
@@ -37,19 +27,21 @@ def hash(obs: Observation) -> tuple:
     opp = obs["opponent"]
     x_diff = opp["position"][0] - ag["position"][0]
     y_diff = opp["position"][1] - ag["position"][1]
-    rel_dx = np.sign(opp["position"][0] - ag["position"][0])  # -1, 0, 1
-    rel_dy = np.sign(opp["position"][1] - ag["position"][1])  # -1, 0, 1
+    rel_dir = (
+        int(np.sign(x_diff)),
+        int(np.sign(y_diff)),
+    )  # (-1/0/1, -1/0/1) above/below/left/right
     key = (
         ag["stars"],
         ag["budget"]["rock"],
         ag["budget"]["paper"],
         ag["budget"]["scissors"],
         opp["stars"],
-        opp["budget"]["rock"] > 0,
-        opp["budget"]["paper"] > 0,
-        opp["budget"]["scissors"] > 0,
-        rel_dx,  
-        rel_dy,
+        opp["budget"]["rock"],
+        opp["budget"]["paper"],
+        opp["budget"]["scissors"],
+        obs["opponent"]["player_id"],
+        rel_dir,
     )
     # print("key", key)
     return key
@@ -124,7 +116,7 @@ def Q_learning(num_episodes=10000, gamma=0.9, epsilon=1, decay_rate=0.999):
 Run training if train_flag is set; otherwise, run evaluation using saved Q-table.
 """
 
-num_episodes = 20000
+num_episodes = 10_000
 decay_rate = 0.999
 if train_flag:
     Q_table = Q_learning(

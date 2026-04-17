@@ -5,7 +5,7 @@ from tqdm import tqdm
 from stable_baselines3 import DQN
 from stable_baselines3.common.callbacks import ProgressBarCallback
 
-from environment_dynamic.rrps_gym import RestrictedRPSEnv
+from environment_dqn_nav.rrps_gym import RestrictedRPSEnv
 import gym_core.visualizer as vis
 import argparse
 

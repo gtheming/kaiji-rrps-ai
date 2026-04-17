@@ -1,5 +1,5 @@
-from environment_core_dep.player import Player
-from environment_core_dep.move import Card
+from environment_tabular_nav.player import Player
+from environment_tabular_nav.move import Card
 
 
 class MatchupTable:
