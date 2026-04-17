@@ -1,29 +1,25 @@
-from gym_core.Q_learn import RRPSQLearnAgentCore
-from environment_static.rrps_gym import RestrictedRPSEnv
-from environment_static.rrps_gym import Observation
+from gym_core.Q_learn import RRPSQLearnCore
+from environment_tabular_nav.rps_gym import Observation
 import numpy as np
 
 
-class QLearnTabularNav(RRPSQLearnAgentCore):
-    def __init__(self):
-        super().__init__(env=RestrictedRPSEnv(n_opponents=1, stars=3))
-
+class QLearnTabularNav(RRPSQLearnCore[Observation]):
     def hash(self, obs):
         ag = obs["agent"]
         opp = obs["opponent"]
-
-        rel_dx = np.sign(opp["position"][0] - ag["position"][0])  # -1, 0, 1
-        rel_dy = np.sign(opp["position"][1] - ag["position"][1])  # -1, 0, 1
-        key = (
-            ag["stars"],
-            ag["budget"]["rock"],
-            ag["budget"]["paper"],
-            ag["budget"]["scissors"],
-            opp["stars"],
-            opp["budget"]["rock"] > 0,
-            opp["budget"]["paper"] > 0,
-            opp["budget"]["scissors"] > 0,
+        rel_dx = np.sign(opp["position"][0] - ag["position"][0])
+        rel_dy = np.sign(opp["position"][1] - ag["position"][1])
+        initial = self.env.initial_budget
+        opp_state = self.env.player_dict[opp["player_id"]]
+        return (
+            ag["stars_total"],
+            ag["budget"]["rock_total"] > 0,
+            ag["budget"]["paper_total"] > 0,
+            ag["budget"]["scissors_total"] > 0,
+            opp["stars_total"],
+            initial - opp_state["rock_total"],
+            initial - opp_state["paper_total"],
+            initial - opp_state["scissors_total"],
             rel_dx,
             rel_dy,
         )
-        return key

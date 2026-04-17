@@ -15,21 +15,16 @@ from gym_core.cards import Card
 from gym_core.info import Info, GameStatus
 from gym_core.player import PlayerDict, PlayerID, Budget, Player
 from gym_core.matchup_dict import MatchupDict
+from gym_core.reward_config import RewardConfig as _BaseRewardConfig
 from gym_core.rrps_gym import RRPSEnvCore
 
 
 @dataclass
-class RewardConfig:
-    win_matchup: float = 100
-    lose_matchup: float = -100
+class RewardConfig(_BaseRewardConfig):
     tie_matchup: float = 10
-    eliminated: float = -500
     victory: float = 2000
-    invalid_move: float = -10
     within_challenge_range: float = 1
     approach_opponent: float = 0.5
-    has_cards_at_end: float = -200
-    has_sub_3_stars_at_end: float = -300
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────────────

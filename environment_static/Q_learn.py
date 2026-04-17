@@ -14,6 +14,7 @@ class QLearnStatic(RRPSQLearnCore[Observation]):
         )
         opponent_state = tuple(
             (
+                p["stars_total"],
                 initial["rock_total"] - p["rock_total"],
                 initial["paper_total"] - p["paper_total"],
                 initial["scissors_total"] - p["scissors_total"],
