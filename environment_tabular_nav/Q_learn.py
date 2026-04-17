@@ -1,16 +1,17 @@
 from gym_core.Q_learn import RRPSQLearnAgentCore
 from environment_static.rrps_gym import RestrictedRPSEnv
 from environment_static.rrps_gym import Observation
+import numpy as np
 
-class QLearnStatic(RRPSQLearnAgentCore):
+
+class QLearnTabularNav(RRPSQLearnAgentCore):
     def __init__(self):
         super().__init__(env=RestrictedRPSEnv(n_opponents=1, stars=3))
 
     def hash(self, obs):
         ag = obs["agent"]
         opp = obs["opponent"]
-        x_diff = opp["position"][0] - ag["position"][0]
-        y_diff = opp["position"][1] - ag["position"][1]
+
         rel_dx = np.sign(opp["position"][0] - ag["position"][0])  # -1, 0, 1
         rel_dy = np.sign(opp["position"][1] - ag["position"][1])  # -1, 0, 1
         key = (
@@ -25,3 +26,4 @@ class QLearnStatic(RRPSQLearnAgentCore):
             rel_dx,
             rel_dy,
         )
+        return key

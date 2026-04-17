@@ -7,12 +7,15 @@ from typing import TypeVar, Generic, Generator
 import numpy as np
 from tqdm import tqdm
 import pickle
+import gym_core.visualizer as vis
 
 ObsType = TypeVar("ObsType")
 
 
 class RRPSQLearnCore(Generic[ObsType]):
-    def __init__(self, env: RRPSEnvCore, agent_name: str) -> None:
+    def __init__(
+        self, env: RRPSEnvCore, agent_name: str | None = None
+    ) -> None:
         if not isinstance(env, RRPSEnvCore):
             raise TypeError(
                 "env must be an instance of RRPSEnvCore, got"
@@ -23,9 +26,15 @@ class RRPSQLearnCore(Generic[ObsType]):
         self.Q_table: Dict[Any, Any] | None = None
 
     @abstractmethod
-    def hash(self, obs) -> np.ndarray:
+    def hash(self, obs: ObsType) -> np.ndarray:
         """function used to convert the observation to a"""
         ...
+
+    @staticmethod
+    def _file_name(
+        agent_name: str, train_episodes: int, decay_rate: float
+    ) -> str:
+        return f"{agent_name}_{train_episodes}_{decay_rate}.pickle"
 
     @staticmethod
     def softmax(x, temp=1.0):
@@ -34,7 +43,7 @@ class RRPSQLearnCore(Generic[ObsType]):
 
     def agent_move(self, obs):
         if self.Q_table is None:
-            raise "No agent Loaded"
+            raise ValueError("No agent loaded")
         state = self.hash(obs)
         Q_val = self.Q_table[state]
         return self.softmax(Q_val)
@@ -46,10 +55,12 @@ class RRPSQLearnCore(Generic[ObsType]):
         decay_rate: float,
         epsilon: float = 1,
         gui: bool = False,
+        agent_name: str | None = None,
     ):
         Q_table = {}
         Q_update_counts = {}
-
+        if agent_name is None and self.agent_name is None:
+            raise ValueError("agent_name must be provided")
         for _ in tqdm(range(train_episodes)):
             start_obs, _ = self.env.reset()
             prev_state_key = self.hash(start_obs)
@@ -102,24 +113,25 @@ class RRPSQLearnCore(Generic[ObsType]):
                     break
                 else:
                     prev_state_key = new_state_key
-        with open(
-            self.agent_name
-            + str(train_episodes)
-            + "_"
-            + str(decay_rate)
-            + ".pickle",
-            "wb",
-        ) as handle:
+        name = agent_name or self.agent_name
+        with open(self._file_name(name), "wb") as handle:
             pickle.dump(Q_table, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        self.Q_table = Q_table
+        self.agent_name = name
         return self
 
-    @classmethod
-    def render_gui(cls, terminated, truncated, info: dict[str, Any]):
-        """optional, render visualisation of training"""
-        ...
+    def load_agent(
+        self, agent_name: str, train_episodes: int, decay_rate: float
+    ):
+        with open(
+            self._file_name(agent_name, train_episodes, decay_rate), "rb"
+        ) as handle:
+            self.Q_table = pickle.load(handle)
+        self.agent_name = agent_name
 
-    def play_agent(self, num_episodes: int, gui: bool = False) -> Generator[tuple[ObsType, float, bool, bool, dict], None, None]:
-        """generator that plays through agent for a number of episodes, yields the gym step return values"""
+    def play_agent(
+        self, gui: bool = False
+    ) -> Generator[tuple[ObsType, float, bool, bool, dict], None, None]:
         obs, info = self.env.reset()
         total_reward = 0
         terminated = False
@@ -141,3 +153,8 @@ class RRPSQLearnCore(Generic[ObsType]):
                 self.render_gui(terminated, truncated, info)
             total_reward += reward
         return self
+
+    def render_gui(self, terminated, truncated, info):
+        if not vis.is_initialized():
+            vis.init()
+        vis.refresh(terminated, truncated, info)

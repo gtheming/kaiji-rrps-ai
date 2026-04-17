@@ -51,7 +51,7 @@ def resolve(m1: Card, m2: Card) -> int:
 # ── environment ───────────────────────────────────────────────────────────────────
 
 
-class StaticRRPSEnv(RRPSEnvCore):
+class StaticRRPSEnv(RRPSEnvCore[Observation]):
     def __init__(
         self,
         n_opponents: int = 6,
